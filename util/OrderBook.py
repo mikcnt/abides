@@ -56,11 +56,6 @@ class OrderBook:
 
     def handle_ohlc(self, order, price, date, order_id, executed=False):
         """ fill the ohlc structure with the last order and price """
-        # print(self.last_one_minute_time)
-        if self.last_one_minute_time > pd.to_datetime("2020-06-03 10:30:00"):
-            print(self.ohlc)
-            self.ohlc.to_csv("prova.csv")
-            exit()
         if date - self.last_one_minute_time >= pd.Timedelta("1m"):
             if len(self.last_one_minute) == 0:
                 if self.last_row_df is not None: 
@@ -68,7 +63,6 @@ class OrderBook:
                 else:
                     self.last_row_df = self.last_row_df
                     self.last_one_minute = {"date" : [], "prices" : []}
-                    print(self.last_one_minute_time)
                     self.last_one_minute_time = self.last_one_minute_time + pd.Timedelta("1m")
                     self.n_orders = 0
                     return
@@ -87,7 +81,6 @@ class OrderBook:
             # Reset one minute variables 
             self.last_row_df = row_df
             self.last_one_minute = {"date" : [], "prices" : []}
-            print(self.last_one_minute_time)
             self.last_one_minute_time = self.last_one_minute_time + pd.Timedelta("1m")
             self.n_orders = 0
                     

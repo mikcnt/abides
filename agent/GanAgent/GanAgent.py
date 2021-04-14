@@ -66,6 +66,9 @@ class GanAgent(TradingAgent):
             self.getCurrentSpread(self.symbol)
             self.state = "AWAITING_SPREAD"
 
+    def receiveOrderbook(self, ohlc):
+        self.ohlc = ohlc
+    
     def receiveMessage(self, currentTime, msg):
         """ Momentum agent actions are determined after obtaining the best bid and ask in the LOB """
         super().receiveMessage(currentTime, msg)
