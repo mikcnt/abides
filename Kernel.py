@@ -16,7 +16,7 @@ class Kernel:
 
         if not random_state:
             raise ValueError("A valid, seeded np.random.RandomState object is required " +
-                         "for the Kernel", self.name)
+                             "for the Kernel", self.name)
             sys.exit()
 
         # A single message queue to keep everything organized by increasing
@@ -49,10 +49,10 @@ class Kernel:
     # This is called to actually start the simulation, once all agent
     # configuration is done.
     def runner(self, agents = [], startTime = None, stopTime = None,
-                         num_simulations = 1, defaultComputationDelay = 1,
-                         defaultLatency = 1, agentLatency = None, latencyNoise = [ 1.0 ],
-                         agentLatencyModel = None, skip_log = False,
-                         seed = None, oracle = None, log_dir = None):
+               num_simulations = 1, defaultComputationDelay = 1,
+               defaultLatency = 1, agentLatency = None, latencyNoise = [ 1.0 ],
+               agentLatencyModel = None, skip_log = False,
+               seed = None, oracle = None, log_dir = None):
 
         # agents must be a list of agents for the simulation,
         #                based on class agent.Agent
@@ -101,6 +101,7 @@ class Kernel:
         # (for itself only).    It represents the time penalty applied to
         # an agent each time it is awakened    (wakeup or recvMsg).    The
         # penalty applies _after_ the agent acts, before it may act again.
+
         # TODO: this might someday change to pd.Timedelta objects.
         self.agentComputationDelays = [defaultComputationDelay] * len(agents)
 
@@ -198,11 +199,11 @@ class Kernel:
                 # Periodically print the simulation time and total messages, even if muted.
                 if ttl_messages % 100000 == 0:
                     print ("\n--- Simulation time: {}, messages processed: {}, wallclock elapsed: {} ---\n".format(
-                                                 self.fmtTime(self.currentTime), ttl_messages, pd.Timestamp('now') - eventQueueWallClockStart))
+                            self.fmtTime(self.currentTime), ttl_messages, pd.Timestamp('now') - eventQueueWallClockStart))
 
                 log_print ("\n--- Kernel Event Queue pop ---")
                 log_print ("Kernel handling {} message for agent {} at time {}", 
-                                     msg_type, msg_recipient, self.fmtTime(self.currentTime))
+                           msg_type, msg_recipient, self.fmtTime(self.currentTime))
 
                 ttl_messages += 1
 
@@ -222,7 +223,7 @@ class Kernel:
                         self.messages.put((self.agentCurrentTimes[agent],
                                                             (msg_recipient, msg_type, msg)))
                         log_print ("Agent in future: wakeup requeued for {}",
-                                             self.fmtTime(self.agentCurrentTimes[agent]))
+                                   self.fmtTime(self.agentCurrentTimes[agent]))
                         continue
                         
                     # Set agent's current time to global current time for start
@@ -233,11 +234,11 @@ class Kernel:
                     agents[agent].wakeup(self.currentTime)
 
                     # Delay the agent by its computation delay plus any transient additional delay requested.
-                    self.agentCurrentTimes[agent] += pd.Timedelta(self.agentComputationDelays[agent] +
-                                                                                                                self.currentAgentAdditionalDelay)
+                    self.agentCurrentTimes[agent] += pd.Timedelta(self.agentComputationDelays[agent] + self.currentAgentAdditionalDelay)
 
                     log_print ("After wakeup return, agent {} delayed from {} to {}",
-                                         agent, self.fmtTime(self.currentTime), self.fmtTime(self.agentCurrentTimes[agent]))
+                               agent, self.fmtTime(self.currentTime),
+                               self.fmtTime(self.agentCurrentTimes[agent]))
 
                 elif msg_type == MessageType.MESSAGE:
 
@@ -249,9 +250,9 @@ class Kernel:
                     if self.agentCurrentTimes[agent] > self.currentTime:
                         # Push the message back into the PQ with a new time.
                         self.messages.put((self.agentCurrentTimes[agent],
-                                                            (msg_recipient, msg_type, msg)))
+                                           (msg_recipient, msg_type, msg)))
                         log_print ("Agent in future: message requeued for {}",
-                                             self.fmtTime(self.agentCurrentTimes[agent]))
+                                   self.fmtTime(self.agentCurrentTimes[agent]))
                         continue
 
                     # Set agent's current time to global current time for start
@@ -267,15 +268,16 @@ class Kernel:
 
                     # Delay the agent by its computation delay plus any transient additional delay requested.
                     self.agentCurrentTimes[agent] += pd.Timedelta(self.agentComputationDelays[agent] +
-                                                                                                                self.currentAgentAdditionalDelay)
+                                                                  self.currentAgentAdditionalDelay)
 
                     log_print ("After receiveMessage return, agent {} delayed from {} to {}",
-                                         agent, self.fmtTime(self.currentTime), self.fmtTime(self.agentCurrentTimes[agent]))
+                               agent, self.fmtTime(self.currentTime),
+                               self.fmtTime(self.agentCurrentTimes[agent]))
 
                 else:
                     raise ValueError("Unknown message type found in queue",
-                                                     "currentTime:", self.currentTime,
-                                                     "messageType:", self.msg.type)
+                                     "currentTime:", self.currentTime,
+                                     "messageType:", self.msg.type)
 
             if self.messages.empty():
                 log_print ("\n--- Kernel Event Queue empty ---")
@@ -305,8 +307,8 @@ class Kernel:
                 agent.kernelTerminating()
 
             print ("Event Queue elapsed: {}, messages: {}, messages per second: {:0.1f}".format(
-                         eventQueueWallClockElapsed, ttl_messages, 
-                         ttl_messages / (eventQueueWallClockElapsed / (np.timedelta64(1, 's')))))
+                    eventQueueWallClockElapsed, ttl_messages, 
+                    ttl_messages / (eventQueueWallClockElapsed / (np.timedelta64(1, 's')))))
             log_print ("Ending sim {}", sim)
 
 
@@ -380,15 +382,15 @@ class Kernel:
             latency = self.agentLatencyModel.get_latency(sender_id = sender, recipient_id = recipient)
             deliverAt = sentTime + pd.Timedelta(latency)
             log_print ("Kernel applied latency {}, accumulated delay {}, one-time delay {} on sendMessage from: {} to {}, scheduled for {}",
-                                 latency, self.currentAgentAdditionalDelay, delay, self.agents[sender].name, self.agents[recipient].name,
-                                 self.fmtTime(deliverAt))
+                       latency, self.currentAgentAdditionalDelay, delay, self.agents[sender].name, self.agents[recipient].name,
+                       self.fmtTime(deliverAt))
         else:
             latency = self.agentLatency[sender][recipient]
             noise = self.random_state.choice(len(self.latencyNoise), 1, self.latencyNoise)[0]
             deliverAt = sentTime + pd.Timedelta(latency + noise)
             log_print ("Kernel applied latency {}, noise {}, accumulated delay {}, one-time delay {} on sendMessage from: {} to {}, scheduled for {}",
-                                 latency, noise, self.currentAgentAdditionalDelay, delay, self.agents[sender].name, self.agents[recipient].name,
-                                 self.fmtTime(deliverAt))
+                       latency, noise, self.currentAgentAdditionalDelay, delay, self.agents[sender].name, self.agents[recipient].name,
+                       self.fmtTime(deliverAt))
 
         # Finally drop the message in the queue with priority == delivery time.
         self.messages.put((deliverAt, (recipient, MessageType.MESSAGE, msg)))
@@ -407,22 +409,21 @@ class Kernel:
         # kernel will not supply any parameters to the wakeup() call.
 
         if requestedTime is None:
-                requestedTime = self.currentTime + pd.TimeDelta(1)
+            requestedTime = self.currentTime + pd.TimeDelta(1)
 
         if sender is None:
             raise ValueError("setWakeup() called without valid sender ID",
-                                             "sender:", sender, "requestedTime:", requestedTime)
+                             "sender:", sender, "requestedTime:", requestedTime)
 
         if self.currentTime and (requestedTime < self.currentTime):
             raise ValueError("setWakeup() called with requested time not in future",
-                                             "currentTime:", self.currentTime,
-                                             "requestedTime:", requestedTime)
+                             "currentTime:", self.currentTime,
+                             "requestedTime:", requestedTime)
 
         log_print ("Kernel adding wakeup for agent {} at time {}",
-                             sender, self.fmtTime(requestedTime))
+                   sender, self.fmtTime(requestedTime))
 
-        self.messages.put((requestedTime,
-                                            (sender, MessageType.WAKEUP, None)))
+        self.messages.put((requestedTime, (sender, MessageType.WAKEUP, None)))
 
 
     def getAgentComputeDelay(self, sender = None):
@@ -445,12 +446,12 @@ class Kernel:
         # requestedDelay should be in whole nanoseconds.
         if not type(requestedDelay) is int:
             raise ValueError("Requested computation delay must be whole nanoseconds.",
-                                             "requestedDelay:", requestedDelay)
+                             "requestedDelay:", requestedDelay)
 
         # requestedDelay must be non-negative.
         if not requestedDelay >= 0:
             raise ValueError("Requested computation delay must be non-negative nanoseconds.",
-                                             "requestedDelay:", requestedDelay)
+                             "requestedDelay:", requestedDelay)
 
         self.agentComputationDelays[sender] = requestedDelay
 
@@ -466,12 +467,12 @@ class Kernel:
         # additionalDelay should be in whole nanoseconds.
         if not type(additionalDelay) is int:
             raise ValueError("Additional delay must be whole nanoseconds.",
-                                             "additionalDelay:", additionalDelay)
+                             "additionalDelay:", additionalDelay)
 
         # additionalDelay must be non-negative.
         if not additionalDelay >= 0:
             raise ValueError("Additional delay must be non-negative nanoseconds.",
-                                             "additionalDelay:", additionalDelay)
+                             "additionalDelay:", additionalDelay)
 
         self.currentAgentAdditionalDelay += additionalDelay
 
@@ -527,9 +528,9 @@ class Kernel:
     def appendSummaryLog (self, sender, eventType, event):
         # We don't even include a timestamp, because this log is for one-time-only
         # summary reporting, like starting cash, or ending cash.
-        self.summaryLog.append({ 'AgentID' : sender,
-                                                         'AgentStrategy' : self.agents[sender].type,
-                                                         'EventType' : eventType, 'Event' : event })
+        self.summaryLog.append({'AgentID' : sender,
+                                'AgentStrategy' : self.agents[sender].type,
+                                'EventType' : eventType, 'Event' : event })
 
 
     def writeSummaryLog (self):
@@ -546,11 +547,11 @@ class Kernel:
 
     def updateAgentState (self, agent_id, state):
         """ Called by an agent that wishes to replace its custom state in the dictionary
-                the Kernel will return at the end of simulation.    Shared state must be set directly,
-                and agents should coordinate that non-destructively.
+            the Kernel will return at the end of simulation.    Shared state must be set directly,
+            and agents should coordinate that non-destructively.
 
-                Note that it is never necessary to use this kernel state dictionary for an agent
-                to remember information about itself, only to report it back to the config file.
+            Note that it is never necessary to use this kernel state dictionary for an agent
+            to remember information about itself, only to report it back to the config file.
         """
 
         if 'agent_state' not in self.custom_state: self.custom_state['agent_state'] = {}
