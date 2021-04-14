@@ -34,6 +34,17 @@ class OrderBook:
         # Create an order history for the exchange to report to certain agent types.
         self.history = [{}]
 
+        # get the last recent ohlc 
+        index_date = pd.date_range("2020-06-03 09:30:00", "2020-06-03 16:30:00", freq="1Min")
+        self.ohlc = pd.DataFrame(index=index_date, columns=["open","high","low","close", "norders"])
+        
+        # last 1 minute orders and prices 
+        self.last_one_minute = {"date" : [], "prices" : []}
+        self.handled_order_id = set()
+        self.n_orders = 0
+        self.last_row_df = None 
+        self.last_one_minute_time = pd.to_datetime("2020-06-03 09:30:00")
+                
         # Last timestamp the orderbook for that symbol was updated
         self.last_update_ts = None
 
@@ -43,6 +54,53 @@ class OrderBook:
             "self.history_previous_length": 0
         }
 
+    def handle_ohlc(self, order, price, date, order_id, executed=False):
+        """ fill the ohlc structure with the last order and price """
+        # print(self.last_one_minute_time)
+        if self.last_one_minute_time > pd.to_datetime("2020-06-03 10:30:00"):
+            print(self.ohlc)
+            self.ohlc.to_csv("prova.csv")
+            exit()
+        if date - self.last_one_minute_time >= pd.Timedelta("1m"):
+            if len(self.last_one_minute) == 0:
+                if self.last_row_df is not None: 
+                    row_df = self.last_update_ts
+                else:
+                    self.last_row_df = self.last_row_df
+                    self.last_one_minute = {"date" : [], "prices" : []}
+                    print(self.last_one_minute_time)
+                    self.last_one_minute_time = self.last_one_minute_time + pd.Timedelta("1m")
+                    self.n_orders = 0
+                    return
+            else:
+                if len(self.last_one_minute) == 1:
+                    self.last_one_minute["date"] = self.last_one_minute["date"]*2
+                    self.last_one_minute["prices"] = self.last_one_minute["prices"]*2
+                row_df = pd.DataFrame(self.last_one_minute)
+                row_df.index = row_df["date"]
+                row_df = row_df[["prices"]]
+                row_df = row_df.resample("1Min").ohlc()
+                row_df.columns = ["open", "high", "low", "close"]
+            self.ohlc.loc[row_df.index[0], row_df.columns] = row_df.iloc[0][row_df.columns]
+            self.ohlc.loc[row_df.index[0], "norders"] = self.n_orders
+            
+            # Reset one minute variables 
+            self.last_row_df = row_df
+            self.last_one_minute = {"date" : [], "prices" : []}
+            print(self.last_one_minute_time)
+            self.last_one_minute_time = self.last_one_minute_time + pd.Timedelta("1m")
+            self.n_orders = 0
+                    
+        if executed:
+            if order_id not in self.handled_order_id:    
+                self.handled_order_id.add(order_id)
+                self.n_orders += 1
+            self.last_one_minute["date"].append(date)
+            self.last_one_minute["prices"].append(price)
+        else:
+            self.handled_order_id.add(order_id)
+            self.n_orders += 1
+    
     def handleLimitOrder(self, order):
         # Matches a limit order or adds it to the order book.  Handles partial matches piecewise,
         # consuming all possible shares at the best price before moving on, without regard to
@@ -63,6 +121,9 @@ class OrderBook:
                                            'modifications': [],
                                            'cancellations': []}
 
+        # add orders to the ohlc 
+        self.handle_ohlc(order, None, self.owner.currentTime, order.order_id, executed=False)
+        
         matching = True
 
         self.prettyPrint()
@@ -167,6 +228,9 @@ class OrderBook:
             log_print("{} order discarded.  Quantity ({}) must be a positive integer.", order.symbol, order.quantity)
             return
 
+        # add orders to the ohlc 
+        self.handle_ohlc(order, None, self.owner.currentTime, order.order_id, executed=False)
+        
         orderbook_side = self.getInsideAsks() if order.is_buy_order else self.getInsideBids()
 
         limit_orders = {} # limit orders to be placed (key=price, value=quantity)
@@ -238,6 +302,10 @@ class OrderBook:
             # was being "advertised" in the order book.
             matched_order.fill_price = matched_order.limit_price
 
+            self.handle_ohlc(order, matched_order.limit_price, self.owner.currentTime, 
+                             order.order_id, executed=True)
+        
+        
             # Record the transaction in the order history and push the indices
             # out one, possibly truncating to the maximum history length.
 

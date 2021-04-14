@@ -199,7 +199,7 @@ class ValueAgent(TradingAgent):
             if np.random.rand() < self.percent_aggr:
                 adjust_int = 0
             else:
-                adjust_int = np.random.randint( 0, self.depth_spread*spread )
+                adjust_int = np.random.randint( 0, np.ceil(self.depth_spread*spread) )
                 #adjustment to the limit price, allowed to post inside the spread
                 #or deeper in the book as a passive order to maximize surplus
 

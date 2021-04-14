@@ -10,7 +10,7 @@ Please see the wiki for tutorials and example configurations:
 
 https://github.com/abides-sim/abides/wiki
 
-## Quickstart
+## Quickstartconfig
 ```
 mkdir project
 cd project
