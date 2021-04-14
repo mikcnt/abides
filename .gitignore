@@ -11,4 +11,4 @@ venv/
 .idea/
 .ipynb/
 .ipynb_checkpoints/
-checkpoints
+gan_checkpoints

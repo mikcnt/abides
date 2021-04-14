@@ -26,7 +26,7 @@ from agent.examples.MomentumAgent import MomentumAgent
 from agent.execution.POVExecutionAgent import POVExecutionAgent
 from model.LatencyModel import LatencyModel
 
-from agent.examples.mine.GanAgent import GanAgent
+from agent.GanAgent.GanAgent import GanAgent
 
 ########################################################################################################################
 ############################################### GENERAL CONFIG #########################################################
@@ -381,7 +381,7 @@ agents.extend(
             max_size=10,
             wake_up_freq="1s",
             log_orders=log_orders,
-            generator_path="085.pth",
+            generator_path="gan_checkpoints/085.pth",
             random_state=np.random.RandomState(
                 seed=np.random.randint(low=0, high=2 ** 32, dtype="uint64")
             ),
