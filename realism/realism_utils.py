@@ -94,8 +94,6 @@ def augment_with_VWAP(merged):
     merged['VWAP'] = merged['VWAP']
     merged = merged.set_index('index')
     merged = merged.drop(columns=['level_0'])
-    del merged.index.name
-
     return merged
 
 
