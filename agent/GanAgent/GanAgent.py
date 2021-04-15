@@ -77,25 +77,27 @@ class GanAgent(TradingAgent):
     def receiveMessage(self, currentTime, msg):
         """ Momentum agent actions are determined after obtaining the best bid and ask in the LOB """
         super().receiveMessage(currentTime, msg)
-        if (
-            not self.subscribe
-            and self.state == "AWAITING_SPREAD"
-            and msg.body["msg"] == "QUERY_SPREAD"
-        ):
-            bid, volume_bid, ask, volume_ask = self.getKnownBidAsk(self.symbol)
-            self.currentTime = currentTime
-            self.placeOrders(bid, ask, volume_bid, volume_ask)
-            self.setWakeup(currentTime + self.getWakeFrequency())
-            self.state = "AWAITING_WAKEUP"
-        elif (
-            self.subscribe
-            and self.state == "AWAITING_MARKET_DATA"
-            and msg.body["msg"] == "MARKET_DATA"
-        ):
-            bids, asks = self.known_bids[self.symbol], self.known_asks[self.symbol]
-            if bids and asks:
-                self.placeOrders(bids[0][0], asks[0][0], bids[0][1], asks[0][1])
-            self.state = "AWAITING_MARKET_DATA"
+        self.placeOrders()
+        self.setWakeup(currentTime + pd.Timedelta('30s'))
+        # if (
+        #     not self.subscribe
+        #     and self.state == "AWAITING_SPREAD"
+        #     and msg.body["msg"] == "QUERY_SPREAD"
+        # ):
+        #     bid, volume_bid, ask, volume_ask = self.getKnownBidAsk(self.symbol)
+        #     self.currentTime = currentTime
+        #     self.placeOrders(bid, ask, volume_bid, volume_ask)
+        #     self.setWakeup(currentTime + self.getWakeFrequency())
+        #     self.state = "AWAITING_WAKEUP"
+        # elif (
+        #     self.subscribe
+        #     and self.state == "AWAITING_MARKET_DATA"
+        #     and msg.body["msg"] == "MARKET_DATA"
+        # ):
+        #     bids, asks = self.known_bids[self.symbol], self.known_asks[self.symbol]
+        #     if bids and asks:
+        #         self.placeOrders(bids[0][0], asks[0][0], bids[0][1], asks[0][1])
+        #     self.state = "AWAITING_MARKET_DATA"
 
     # Il placeOrders funziona diversamente a seconda della fase:
     # 1) OBSERVING:
@@ -109,17 +111,16 @@ class GanAgent(TradingAgent):
     # finestra temporale (e.g., 30s), l'agente torna in fase di osservazione
     # e reimposta la wake up frequency di default.
 
-    def placeOrders(self, bid, ask, volume_bid, volume_ask):
-        if self.currentTime >= self.last_call + pd.to_datetime('1Min'):
-            gan_input = generate_input(ohlc)
+    def placeOrders(self):
+        if self.currentTime <= pd.to_datetime("2020-06-03 09:30:00") + pd.Timedelta("30m"):
+            return
+        if self.currentTime >= self.last_call + pd.Timedelta("1m"):
+            gan_input = generate_input(self.ohlc, self.currentTime)
             self.trades = self.generator(gan_input)
             self.trades = unnormalize(self.trades)
-            
-        
-        self.trades["time_diff"] = self.currentTime + pd.to_timedelta(trades['time_diff'].cumsum().clip(0.0001), unit='S')
-        
-        
-        self.trader_agent.add_orders(self.trades.values)
+            self.trades["time_diff"] = self.currentTime + pd.to_timedelta(trades['time_diff'].cumsum().clip(0.0001), unit='S')
+            self.trader_agent.add_orders(self.trades.values)
+            self.last_call = self.currentTime
 
 
         return

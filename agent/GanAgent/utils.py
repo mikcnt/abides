@@ -44,7 +44,7 @@ def extract_signals(ohlc):
     
     # drop useless columns
     ohlc.drop(
-        columns={"open", "high", "low", "close", "volume"}, inplace=True
+        columns={"open", "high", "low", "close"}, inplace=True
     )
     return ohlc
 
@@ -89,11 +89,17 @@ def generate_input(ohlc, time):
         "count",
     ]
 
-    start_time = time - pd.to_datetime('2Min')
-    end_time = time - pd.to_datetime('1Min')
-        
-    ohlc = ohlc.loc[start_time:end_time]
+    open_price = ohlc['open'].loc[time - pd.Timedelta('1m')]
+    close_price = ohlc['close'].loc[time - pd.Timedelta('1m')]
+    
+    mid_price = (open_price + close_price) / 2
+
     signals = extract_signals(ohlc)
+
+    start_time = time - pd.Timedelta('2m')
+    end_time = time - pd.Timedelta('1m')
+
+    signals = signals.loc[start_time:end_time]
 
     signals = normalize(signals)
 

@@ -36,7 +36,7 @@ class OrderBook:
 
         # get the last recent ohlc 
         index_date = pd.date_range("2020-06-03 09:30:00", "2020-06-03 16:30:00", freq="1Min")
-        self.ohlc = pd.DataFrame(index=index_date, columns=["open","high","low","close", "norders"])
+        self.ohlc = pd.DataFrame(index=index_date, columns=["open","high","low","close", "count"])
         
         # last 1 minute orders and prices 
         self.last_one_minute = {"date" : [], "prices" : []}
@@ -76,7 +76,7 @@ class OrderBook:
                 row_df = row_df.resample("1Min").ohlc()
                 row_df.columns = ["open", "high", "low", "close"]
             self.ohlc.loc[row_df.index[0], row_df.columns] = row_df.iloc[0][row_df.columns]
-            self.ohlc.loc[row_df.index[0], "norders"] = self.n_orders
+            self.ohlc.loc[row_df.index[0], "count"] = self.n_orders
             
             # Reset one minute variables 
             self.last_row_df = row_df

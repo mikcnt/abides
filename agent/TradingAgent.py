@@ -148,7 +148,6 @@ class TradingAgent(FinancialAgent):
 
 
   # Simulation participation messages.
-
   def wakeup (self, currentTime):
     super().wakeup(currentTime)
 
