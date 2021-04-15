@@ -5,7 +5,6 @@ import numpy as np
 from torchvision import transforms
 from sklearn.preprocessing import MinMaxScaler
 
-
 def extract_signals(ohlc):
     # technical signals
     ohlc["mid_price"] = (ohlc["high"] + ohlc["low"]) / 2
@@ -89,27 +88,22 @@ def generate_input(ohlc, time):
         "count",
     ]
 
-    open_price = ohlc['open'].loc[time - pd.Timedelta('1m')]
-    close_price = ohlc['close'].loc[time - pd.Timedelta('1m')]
-    
-    mid_price = (open_price + close_price) / 2
-
     signals = extract_signals(ohlc)
 
-    start_time = time - pd.Timedelta('2m')
-    end_time = time - pd.Timedelta('1m')
+    start_time = time.floor("Min") - pd.Timedelta('2m')
+    end_time = time.floor("Min") - pd.Timedelta('1m')
 
     signals = signals.loc[start_time:end_time]
 
     signals = normalize(signals)
 
     tech_signals = []
-    tech_signals.append(torch.tensor(signals[cols].mean()))
-    tech_signals.append(torch.tensor(signals[cols].std()))
-    tech_signals.append(torch.tensor(signals[cols].skew()))
-    tech_signals.append(torch.tensor(signals[cols].kurtosis()))
+    tech_signals.append(torch.tensor(signals[cols].mean().fillna(0), dtype=torch.float32))
+    tech_signals.append(torch.tensor(signals[cols].std().fillna(0), dtype=torch.float32))
+    tech_signals.append(torch.tensor(signals[cols].skew().fillna(0), dtype=torch.float32))
+    tech_signals.append(torch.tensor(signals[cols].kurtosis().fillna(0), dtype=torch.float32))
 
-    rand_noise = torch.randn(100 - len(tech_signals) * len(cols))
+    rand_noise = torch.randn(100 - len(tech_signals) * len(cols), dtype=torch.float32)
 
     noise = torch.cat((*tech_signals, rand_noise)).reshape(100, 1, 1)
 
@@ -130,14 +124,16 @@ def load_model(model, path):
     return model
 
 
-def unnormalize(normalized, mid_price, mid_volumes):
+def unnormalize(normalized, mid_price, mid_volumes, avg_volume=None):
     unnormalized = normalized.copy()
-    unnormalized["price"] = normalized["price"] * mid_price
 
-    mid_volumes = np.array(mid_volumes).reshape(1, -1)
+    # TODO: use avg_volume and mid_price here not, using the volume in the current way?
+    unnormalized["price"] = normalized["price"] * mid_price
+#    unnormalized["volume"] = unnormalized["volume"] * avg_volume
+
     scaler = MinMaxScaler()
     scaler.fit(mid_volumes)
-
+#
     volume_unnormalized = scaler.inverse_transform(
         np.array(normalized["volume"]).reshape(1, -1)
     )
@@ -146,6 +142,7 @@ def unnormalize(normalized, mid_price, mid_volumes):
     unnormalized.loc[normalized["direction"] <= 0.5, "direction"] = -1
     unnormalized.loc[normalized["direction"] > 0.5, "direction"] = 1
 
+    # TODO: why?
     unnormalized["time_diff"] = np.exp(normalized["time_diff"] * 10)
 
     return unnormalized

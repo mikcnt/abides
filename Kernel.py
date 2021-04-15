@@ -264,7 +264,7 @@ class Kernel:
                     
                     # Deliver OHLC to gan agent
                     if agents[agent].name.startswith("GAN_AGENT_"):
-                        agents[agent].receiveOrderbook(agents[exchange_agent_id].order_books["ABM"].ohlc)
+                        agents[agent].receiveOrderbook(agents[exchange_agent_id].order_books)
 
                     # Delay the agent by its computation delay plus any transient additional delay requested.
                     self.agentCurrentTimes[agent] += pd.Timedelta(self.agentComputationDelays[agent] +

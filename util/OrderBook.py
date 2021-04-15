@@ -36,12 +36,15 @@ class OrderBook:
 
         # get the last recent ohlc 
         index_date = pd.date_range("2020-06-03 09:30:00", "2020-06-03 16:30:00", freq="1Min")
-        self.ohlc = pd.DataFrame(index=index_date, columns=["open","high","low","close", "count"])
+
+        # TODO: at the beginning of the data we have problem as we need trades? We can use ohlc of the market we want to simulate
+        self.__ohlc = pd.DataFrame(index=index_date, columns=["open","high","low","close", "count", "volume"])
         
         # last 1 minute orders and prices 
         self.last_one_minute = {"date" : [], "prices" : []}
         self.handled_order_id = set()
         self.n_orders = 0
+        self.transacted_volume = 0
         self.last_row_df = None 
         self.last_one_minute_time = pd.to_datetime("2020-06-03 09:30:00")
                 
@@ -54,40 +57,58 @@ class OrderBook:
             "self.history_previous_length": 0
         }
 
-    def handle_ohlc(self, order, price, date, order_id, executed=False):
-        """ fill the ohlc structure with the last order and price """
-        if date - self.last_one_minute_time >= pd.Timedelta("1m"):
+    def __update_ohlc(self, time):
+        """ this function is called to update the ohlc if needed, i.e., if a minute is elapsed """
+        if time - self.last_one_minute_time >= pd.Timedelta("1m"):
             if len(self.last_one_minute) == 0:
-                if self.last_row_df is not None: 
+                if self.last_row_df is not None:
                     row_df = self.last_update_ts
                 else:
                     self.last_row_df = self.last_row_df
-                    self.last_one_minute = {"date" : [], "prices" : []}
+                    self.last_one_minute = {"date": [], "prices": []}
                     self.last_one_minute_time = self.last_one_minute_time + pd.Timedelta("1m")
                     self.n_orders = 0
+                    self.transacted_volume = 0
                     return
             else:
                 if len(self.last_one_minute) == 1:
-                    self.last_one_minute["date"] = self.last_one_minute["date"]*2
-                    self.last_one_minute["prices"] = self.last_one_minute["prices"]*2
+                    self.last_one_minute["date"] = self.last_one_minute["date"] * 2
+                    self.last_one_minute["prices"] = self.last_one_minute["prices"] * 2
                 row_df = pd.DataFrame(self.last_one_minute)
                 row_df.index = row_df["date"]
                 row_df = row_df[["prices"]]
                 row_df = row_df.resample("1Min").ohlc()
                 row_df.columns = ["open", "high", "low", "close"]
-            self.ohlc.loc[row_df.index[0], row_df.columns] = row_df.iloc[0][row_df.columns]
-            self.ohlc.loc[row_df.index[0], "count"] = self.n_orders
-            
-            # Reset one minute variables 
+
+            # Update ohlc with the last collected data in that minute
+            self.__ohlc.loc[row_df.index[0], row_df.columns] = row_df.iloc[0][row_df.columns]
+            self.__ohlc.loc[row_df.index[0], "count"] = self.n_orders
+            self.__ohlc.loc[row_df.index[0], "volume"] = self.transacted_volume
+
+            # Reset one minute variables
             self.last_row_df = row_df
-            self.last_one_minute = {"date" : [], "prices" : []}
+            self.last_one_minute = {"date": [], "prices": []}
             self.last_one_minute_time = self.last_one_minute_time + pd.Timedelta("1m")
             self.n_orders = 0
-                    
+            self.transacted_volume = 0
+
+    def get_ohlc(self, time):
+        """ access the ohlc object """
+        self.__update_ohlc(time)
+        return self.__ohlc
+
+    def handle_ohlc(self, order, price, date, order_id, executed=False):
+        """ fill the ohlc structure with the last order and price """
+
+        # eventually update the ohlc
+        self.__update_ohlc(date)
+
         if executed:
             if order_id not in self.handled_order_id:    
                 self.handled_order_id.add(order_id)
                 self.n_orders += 1
+
+            self.transacted_volume += order.quantity
             self.last_one_minute["date"].append(date)
             self.last_one_minute["prices"].append(price)
         else:

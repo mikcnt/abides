@@ -369,7 +369,7 @@ agent_count += 1
 
 # 7a) Trader agents
 
-num_trader_agents = 10
+num_trader_agents = 1
 
 trader_agents = [TraderAgent(
                     id=j,
@@ -391,7 +391,6 @@ agent_types.extend("TraderAgent")
 # 7b) Gan Agents
 num_gan_agents = num_trader_agents
 
-
 agents.extend(
     [
         GanAgent(
@@ -404,7 +403,7 @@ agents.extend(
             max_size=10,
             wake_up_freq="1s",
             log_orders=log_orders,
-            generator_path="gan_checkpoints/085.pth",
+            generator_path="../200.pth",
             random_state=np.random.RandomState(
                 seed=np.random.randint(low=0, high=2 ** 32, dtype="uint64")
             ),

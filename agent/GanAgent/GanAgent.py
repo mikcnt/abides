@@ -6,7 +6,6 @@ import time
 from .utils import *
 from .model import Generator
 
-
 class GanAgent(TradingAgent):
     def __init__(
         self,
@@ -42,6 +41,7 @@ class GanAgent(TradingAgent):
         self.subscription_requested = False
         self.mid_list = []
         self.volumes = []
+        self.orderbook_symbol = None
         self.tech_signals = []
         self.log_orders = log_orders
         self.generator = load_model(Generator(100), generator_path)
@@ -69,143 +69,60 @@ class GanAgent(TradingAgent):
             self.getCurrentSpread(self.symbol)
             self.state = "AWAITING_SPREAD"
 
-    def receiveOrderbook(self, ohlc):
-        self.ohlc = ohlc
+    def receiveOrderbook(self, orderbooks):
+        assert self.symbol in orderbooks, "The symbol of the GAN agent is not inside the Exchange orderbook"
+        self.orderbook_symbol = orderbooks[self.symbol]
     
     def receiveMessage(self, currentTime, msg):
         """ Momentum agent actions are determined after obtaining the best bid and ask in the LOB """
         super().receiveMessage(currentTime, msg)
         self.placeOrders()
-        self.setWakeup(self.currentTime + self.getWakeFrequency())
-        # if (
-        #     not self.subscribe
-        #     and self.state == "AWAITING_SPREAD"
-        #     and msg.body["msg"] == "QUERY_SPREAD"
-        # ):
-        #     bid, volume_bid, ask, volume_ask = self.getKnownBidAsk(self.symbol)
-        #     self.currentTime = currentTime
-        #     self.placeOrders(bid, ask, volume_bid, volume_ask)
-        #     self.setWakeup(currentTime + self.getWakeFrequency())
-        #     self.state = "AWAITING_WAKEUP"
-        # elif (
-        #     self.subscribe
-        #     and self.state == "AWAITING_MARKET_DATA"
-        #     and msg.body["msg"] == "MARKET_DATA"
-        # ):
-        #     bids, asks = self.known_bids[self.symbol], self.known_asks[self.symbol]
-        #     if bids and asks:
-        #         self.placeOrders(bids[0][0], asks[0][0], bids[0][1], asks[0][1])
-        #     self.state = "AWAITING_MARKET_DATA"
 
-    # Il placeOrders funziona diversamente a seconda della fase:
-    # 1) OBSERVING:
-    # L'agente accumula ad ogni unità di tempo (e.g., 1ms) un bid e ask
-    # Quando ha accumulato 1024 bid+ask, la GAN genera i trade da mandare
-    # e passa in fase di trading.
-    # 2) TRADING:
-    # La nuova unità di tempo sarà definita da il tempo generato dalla GAN.
-    # Ad ogni unità di tempo, l'agente esegue un trade e decide il prossimo
-    # wakeup con il tempo generato. Una volta finiti i trade, o passata una
-    # finestra temporale (e.g., 30s), l'agente torna in fase di osservazione
-    # e reimposta la wake up frequency di default.
+
+    def __get_unormalized_par(self, ohlc):
+        """ get the mid price and volume to compute the unnormalization of generated orders """
+        last_10time = self.currentTime.floor("Min") - pd.Timedelta('10m')
+        last_time = self.currentTime.floor("Min") - pd.Timedelta('1m')
+
+        mid_price = (ohlc['open'].loc[last_time] + ohlc['close'].loc[last_time]) / 2
+
+        # TODO: change here maybe
+        volumes = ohlc.loc[last_10time:last_time]["volume"]
+
+        return mid_price, volumes.values.reshape(-1,1)
 
     def placeOrders(self):
         # Wait for the first 30 minutes so that there is enough data
         if self.currentTime <= pd.to_datetime("2020-06-03 09:30:00") + pd.Timedelta("30m"):
+            print("Set wakeup after 30min market open")
+            self.setWakeup(pd.to_datetime("2020-06-03 10:00:00"))
             return
         # If it is passed more than 1 minute between the last call and this one,
         # we can generate trades with the GAN
         if self.currentTime >= self.last_call + pd.Timedelta("1m"):
+            print("Call trading GAN", self.currentTime)
             # Preprocess the OHLC s.t. the GAN can use that
             # (i.e., generate signals, take last 2 minutes, normalize)
-            gan_input = generate_input(self.ohlc, self.currentTime)
+            ohlc = self.orderbook_symbol.get_ohlc(self.currentTime)
+            mid_price, volumes = self.__get_unormalized_par(ohlc)
+            gan_input = generate_input(ohlc, self.currentTime)
             # Generate trades with the GAN (generator)
-            self.trades = self.generator(gan_input)
+            trades = self.generator(gan_input)
             # Unnormalize the generated trades
-            # TODO: what do we pass to the `unnormalize` function?
-            self.trades = unnormalize(self.trades, mid_price=None, mid_volumes=None)
-            # TODO: `self.trades` is still a `torch.Tensor` => cast it to Pandas
+
+            # trades to pandas
+            trades = pd.DataFrame(trades.reshape(4, -1).detach().numpy()).T.rename(
+                    columns={0: "volume", 1: "price", 2: "direction", 3: "time_diff"})
+            trades = unnormalize(trades, mid_price=mid_price, mid_volumes=volumes)
+
             # change the `time_diff` from difference between each row to absolute time
-            self.trades["time_diff"] = self.currentTime + pd.to_timedelta(trades['time_diff'].cumsum().clip(0.0001), unit='S')
+            trades["time_diff"] = self.currentTime + pd.to_timedelta(trades['time_diff'].cumsum().clip(0.0001), unit='S')
             # Pass trades to the TraderAgent so that it can do the actual trading (even in the future)
-            self.trader_agent.add_orders(self.trades.values)
+            self.trader_agent.add_orders(trades.values)
             # Update last call time for next call
             self.last_call = self.currentTime
-        return
-        
-        # if self.agent_state == "WAITING":
-        #     self.sleep_time -= 1
-        #     if self.sleep_time <= 0:
-        #         self.agent_state = "OBSERVING"
-        #         if self.verbose:
-        #             print(f"GAN Agent {self.id}: WAITING -> OBSERVING.")
-        # # If in state OBSERVING
-        # if self.agent_state == "OBSERVING":
-        #     # print(len(self.mid_list))
-        #     if bid and ask:
-        #         # prima fase: accumula i dati fino ad avere i primi 1024 ordini
-        #         mid_price = (bid + ask) / 2
-        #         mid_volume = (volume_bid + volume_ask) / 2
-        #         if (len(self.mid_list) > 0 and mid_price != self.mid_list[-1]) or len(self.mid_list) == 0:
-        #             self.mid_list.append(mid_price)
-        #             self.volumes.append(mid_volume)
-        #             # print(f"GAN Agent {self.id}: # trades = {len(self.mid_list)}")
-        #         if len(self.mid_list) == 1024:
-        #             # Genera i segnali da mandare in input alla GAN
-        #             extracted_signals = signals(self.mid_list)
-        #             # Normalizza i segnali per avere dati coerenti con il training
-        #             tech_signals = normalize(extracted_signals)
-        #             # Genera input per la GAN (segnali tecnici + noise)
-        #             gan_input = generate_input(tech_signals)
-        #             # Genera i trade, come output della gan e rendi leggibili
-        #             self.trades = reshape_output(self.generator(gan_input))
-        #             # Calcola moving average
-        #             # self.trades = self.trades.rolling(window=100).mean().dropna().reset_index(drop=True)
-        #             # self.volumes = pd.Series(self.volumes).rolling(window=100).mean().dropna().tolist()
-        #             # Normalizza al contrario i dati per poter fare trading
-        #             average_mid_price = np.array(self.mid_list).mean()
-        #             self.trades = unnormalize(
-        #                 self.trades, average_mid_price, self.volumes
-        #             )
-        #             self.agent_state = "TRADING"
-        #             if self.verbose:
-        #                 print(f"GAN Agent {self.id}: OBSERVING -> TRADING.")
 
-        # if self.agent_state == "TRADING":
-        #     # Interrompi il trading se: a) non ci sono più trade b) sono passati 30s
-        #     if len(self.trades) == 0 or self.time_passed > 30:
-        #         # Riazzera il tempo passato per la fase di trading successiva
-        #         self.time_passed = 0
-        #         # Risetta la wake up freq. di default
-        #         self.setWakeup(self.currentTime + self.getWakeFrequency())
-        #         # Setta lo stato di OBSERVING
-        #         self.agent_state = "OBSERVING"
-        #         # self.mid_list = []
-        #         if self.verbose:
-        #             print(f"GAN Agent {self.id}: TRADING -> OBSERVING.")
-        #         return
-        #     # TRADING
-        #     # Altrimenti l'agente fa trading
-
-        #     # Estrai dalla prima riga dell'ouput della GAN il trade
-        #     # (più la direzione e il tempo da aspettare per il prossimo trade)
-        #     volume, price, direction, time_diff = self.trades.iloc[0]
-        #     is_buy_order = direction == 1
-        #     # L'agente fa il trade
-        #     self.placeLimitOrder(
-        #         self.symbol,
-        #         quantity=volume,
-        #         is_buy_order=is_buy_order,
-        #         limit_price=price,
-        #     )
-        #     # Elimina la prima riga => prossimo trade, prossima riga
-        #     self.trades.drop(0, inplace=True)
-        #     self.trades.reset_index(drop=True, inplace=True)
-        #     # Aggiorna il tempo che passerà con il prossimo ordine
-        #     self.time_passed += time_diff
-        #     # Stabilisci quando l'agente si dovrà risvegliare
-        #     time_diff = pd.Timedelta(time_diff, unit="s")
-        #     self.setWakeup(self.currentTime + time_diff)
+        self.setWakeup(self.currentTime + self.getWakeFrequency())
 
     def getWakeFrequency(self):
         return pd.Timedelta(self.wake_up_freq)
