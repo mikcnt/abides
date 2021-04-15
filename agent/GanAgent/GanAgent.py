@@ -81,15 +81,13 @@ class GanAgent(TradingAgent):
 
     def __get_unormalized_par(self, ohlc):
         """ get the mid price and volume to compute the unnormalization of generated orders """
-        last_10time = self.currentTime.floor("Min") - pd.Timedelta('10m')
         last_time = self.currentTime.floor("Min") - pd.Timedelta('1m')
-
         mid_price = (ohlc['open'].loc[last_time] + ohlc['close'].loc[last_time]) / 2
 
         # TODO: change here maybe
-        volumes = ohlc.loc[last_10time:last_time]["volume"]
+        volumes = ohlc.loc[pd.to_datetime("2020-06-03 09:30:00"):pd.to_datetime("2020-06-03 09:59:00")]["volume"] * 0.3
 
-        return mid_price, volumes.values.reshape(-1,1)
+        return mid_price, volumes.values.reshape(-1,1)* 0.3
 
     def placeOrders(self):
         # Wait for the first 30 minutes so that there is enough data

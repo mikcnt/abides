@@ -84,6 +84,7 @@ class OrderBook:
             self.__ohlc.loc[row_df.index[0], row_df.columns] = row_df.iloc[0][row_df.columns]
             self.__ohlc.loc[row_df.index[0], "count"] = self.n_orders
             self.__ohlc.loc[row_df.index[0], "volume"] = self.transacted_volume
+            self.__ohlc.to_csv("orderboook.csv")
 
             # Reset one minute variables
             self.last_row_df = row_df
@@ -95,7 +96,7 @@ class OrderBook:
     def get_ohlc(self, time):
         """ access the ohlc object """
         self.__update_ohlc(time)
-        return self.__ohlc
+        return self.__ohlc.copy()
 
     def handle_ohlc(self, order, price, date, order_id, executed=False):
         """ fill the ohlc structure with the last order and price """
