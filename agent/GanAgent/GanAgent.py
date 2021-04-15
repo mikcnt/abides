@@ -18,11 +18,12 @@ class GanAgent(TradingAgent):
         min_size,
         max_size,
         generator_path,
-        wake_up_freq="1ms",
+        wake_up_freq="30s",
         subscribe=False,
         log_orders=False,
         random_state=None,
         verbose=False,
+        trader_agent=None
     ):
 
         super().__init__(
@@ -51,6 +52,10 @@ class GanAgent(TradingAgent):
         self.verbose = verbose
         
         self.n_traded_orders = 0
+        
+        self.last_call = pd.to_datetime("2020-06-03 09:30:00")
+        
+        self.trader_agent = None
 
     def kernelStarting(self, startTime):
         super().kernelStarting(startTime)
@@ -105,7 +110,20 @@ class GanAgent(TradingAgent):
     # e reimposta la wake up frequency di default.
 
     def placeOrders(self, bid, ask, volume_bid, volume_ask):
-        """ Momentum Agent actions logic """
+        if self.currentTime >= self.last_call + pd.to_datetime('1Min'):
+            gan_input = generate_input(ohlc)
+            self.trades = self.generator(gan_input)
+            self.trades = unnormalize(self.trades)
+            
+        
+        self.trades["time_diff"] = self.currentTime + pd.to_timedelta(trades['time_diff'].cumsum().clip(0.0001), unit='S')
+        
+        
+        self.trader_agent.add_orders(self.trades.values)
+
+
+        return
+        
         if self.agent_state == "WAITING":
             self.sleep_time -= 1
             if self.sleep_time <= 0:

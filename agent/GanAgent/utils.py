@@ -6,41 +6,47 @@ from torchvision import transforms
 from sklearn.preprocessing import MinMaxScaler
 
 
-def signals(mid_list):
-    mid_pd = pd.DataFrame(mid_list, columns=["mid_price"])
+def extract_signals(ohlc):
+    # technical signals
+    ohlc["mid_price"] = (ohlc["high"] + ohlc["low"]) / 2
 
-    # TODO: compute technical signals using time, not rows
-    bb = ta.volatility.BollingerBands(mid_pd["mid_price"], fillna=True)
-    mid_pd["lbband"] = bb.bollinger_lband()
-    mid_pd["hbband"] = bb.bollinger_hband()
+    bb = ta.volatility.BollingerBands(ohlc["close"], fillna=True)
+    ohlc["lbband"] = bb.bollinger_lband()
+    ohlc["hbband"] = bb.bollinger_hband()
 
-    mid_pd["mavg_12"] = ta.volatility.bollinger_mavg(
-        mid_pd["mid_price"], window=12, fillna=True
+    # compute the current volatility of the stock
+    # 10 as window to be consistent with 10 time
+    vatr = ta.volatility.AverageTrueRange(
+        ohlc["high"], ohlc["low"], ohlc["close"], window=10
     )
-    mid_pd["mavg_26"] = ta.volatility.bollinger_mavg(
-        mid_pd["mid_price"], window=26, fillna=True
+    ohlc["vvolat"] = vatr.average_true_range()
+
+    ohlc["mavg_12"] = ta.volatility.bollinger_mavg(
+        ohlc["close"], window=12, fillna=True
+    )
+    ohlc["mavg_26"] = ta.volatility.bollinger_mavg(
+        ohlc["close"], window=26, fillna=True
     )
 
-    ema_12 = ta.trend.EMAIndicator(mid_pd["mid_price"], window=12, fillna=True)
-    mid_pd["ema_12"] = ema_12.ema_indicator()
+    ema_12 = ta.trend.EMAIndicator(ohlc["close"], window=12, fillna=True)
+    ohlc["ema_12"] = ema_12.ema_indicator()
 
-    ema_26 = ta.trend.EMAIndicator(mid_pd["mid_price"], window=26, fillna=True)
-    mid_pd["ema_26"] = ema_26.ema_indicator()
+    ema_26 = ta.trend.EMAIndicator(ohlc["close"], window=26, fillna=True)
+    ohlc["ema_26"] = ema_26.ema_indicator()
 
-    macd = ta.trend.MACD(mid_pd["mid_price"], fillna=True)
-    mid_pd["macd"] = macd.macd()
+    macd = ta.trend.MACD(ohlc["close"], fillna=True)
+    ohlc["macd"] = macd.macd()
 
-    rsi = ta.momentum.RSIIndicator(mid_pd["mid_price"], fillna=True)
-    mid_pd["rsi"] = rsi.rsi()
+    rsi = ta.momentum.RSIIndicator(ohlc["close"], fillna=True)
+    ohlc["rsi"] = rsi.rsi()
 
-    mid_pd["momentum"] = ta.momentum.roc(mid_pd["mid_price"], fillna=True)
-
-    # TODO: `vvolat` (volatility indicator) and `count` (number of orders of previous 10mins)
-    # are just placeholders for the moment
-    mid_pd["count"] = np.arange(len(mid_pd)) + 10000
-    mid_pd["vvolat"] = np.random.rand(len(mid_pd))
-
-    return mid_pd
+    ohlc["momentum"] = ta.momentum.roc(ohlc["close"], fillna=True)
+    
+    # drop useless columns
+    ohlc.drop(
+        columns={"open", "high", "low", "close", "volume"}, inplace=True
+    )
+    return ohlc
 
 
 def normalize(df):
@@ -67,7 +73,7 @@ def normalize(df):
     return df_copy
 
 
-def generate_input(sngls):
+def generate_input(ohlc, time):
 
     cols = [
         "lbband",
@@ -83,11 +89,19 @@ def generate_input(sngls):
         "count",
     ]
 
+    start_time = time - pd.to_datetime('2Min')
+    end_time = time - pd.to_datetime('1Min')
+        
+    ohlc = ohlc.loc[start_time:end_time]
+    signals = extract_signals(ohlc)
+
+    signals = normalize(signals)
+
     tech_signals = []
-    tech_signals.append(torch.tensor(sngls[cols].mean()))
-    tech_signals.append(torch.tensor(sngls[cols].std()))
-    tech_signals.append(torch.tensor(sngls[cols].skew()))
-    tech_signals.append(torch.tensor(sngls[cols].kurtosis()))
+    tech_signals.append(torch.tensor(signals[cols].mean()))
+    tech_signals.append(torch.tensor(signals[cols].std()))
+    tech_signals.append(torch.tensor(signals[cols].skew()))
+    tech_signals.append(torch.tensor(signals[cols].kurtosis()))
 
     rand_noise = torch.randn(100 - len(tech_signals) * len(cols))
 

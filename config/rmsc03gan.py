@@ -27,6 +27,7 @@ from agent.execution.POVExecutionAgent import POVExecutionAgent
 from model.LatencyModel import LatencyModel
 
 from agent.GanAgent.GanAgent import GanAgent
+from agent.GanAgent.TraderAgent import TraderAgent
 
 ########################################################################################################################
 ############################################### GENERAL CONFIG #########################################################
@@ -366,13 +367,35 @@ agents.extend(execution_agents)
 agent_types.extend("ExecutionAgent")
 agent_count += 1
 
-# 7) Gan Agents
-num_gan_agents = 10
+# 7a) Trader agents
+
+num_trader_agents = 10
+
+trader_agents = [TraderAgent(
+                    id=j,
+                    name="TRADER_AGENT_{}".format(j),
+                    type="TraderAgent",
+                    symbol=symbol,
+                    starting_cash=starting_cash,
+                    log_orders=log_orders,
+                    random_state=np.random.RandomState(
+                        seed=np.random.randint(low=0, high=2 ** 32, dtype="uint64")
+                    ),
+                    ) for j in range(agent_count, agent_count + num_trader_agents)]
+
+agents.extend(trader_agents)
+
+agent_count += num_trader_agents
+agent_types.extend("TraderAgent")
+
+# 7b) Gan Agents
+num_gan_agents = num_trader_agents
+
 
 agents.extend(
     [
         GanAgent(
-            id=j,
+            id= j,
             name="GAN_AGENT_{}".format(j),
             type="GanAgent",
             symbol=symbol,
@@ -386,6 +409,7 @@ agents.extend(
                 seed=np.random.randint(low=0, high=2 ** 32, dtype="uint64")
             ),
             verbose=True,
+            trader_agent= trader_agents[j - agent_count]
         )
         for j in range(agent_count, agent_count + num_gan_agents)
     ]
