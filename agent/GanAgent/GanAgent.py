@@ -16,13 +16,16 @@ class GanAgent(TradingAgent):
         starting_cash,
         min_size,
         max_size,
+        mkt_open,
+        mkt_close,
         generator_path,
         wake_up_freq="30s",
         subscribe=False,
         log_orders=False,
         random_state=None,
         verbose=False,
-        trader_agent=None
+        trader_agent=None,
+        volume_perc=0.3
     ):
 
         super().__init__(
@@ -48,12 +51,27 @@ class GanAgent(TradingAgent):
         self.state = "AWAITING_WAKEUP"
         self.agent_state = "WAITING"
         self.time_passed = 0
+        self.mkt_open = mkt_open
+        self.mkt_close = mkt_close
+
+        ## TODO: check try to have deterministic behavior/simulations
+        torch.use_deterministic_algorithms(True)
+        torch.manual_seed(self.random_state.randint(low=0,  high=2 ** 32))
+
         # self.sleep_time = int(np.random.exponential(scale=100))
         self.verbose = verbose
         
-        self.last_call = pd.to_datetime("2020-06-03 09:30:00")
-        
+        self.last_call_gan = self.mkt_open
+        # TODO: the ganstartup time is compute also on orderbook class in the same way, be aware on how to change this
+        self.ganstartup_time = self.mkt_open + pd.Timedelta("30m")
+        self.volume_perc = volume_perc
+
         self.trader_agent = trader_agent
+
+    def save_last_ohlc(self, prefix_file):
+        """ save a log of the last ohlc to debug purpose and logging """
+        ohlc = self.orderbook_symbol.get_ohlc(self.currentTime)
+        ohlc.to_pickle(prefix_file + "ohlc_" + self.mkt_close.strftime("%Y-%m-%d") + "_" + self.symbol + ".bz2")
 
     def kernelStarting(self, startTime):
         super().kernelStarting(startTime)
@@ -78,27 +96,26 @@ class GanAgent(TradingAgent):
         super().receiveMessage(currentTime, msg)
         self.placeOrders()
 
-
     def __get_unormalized_par(self, ohlc):
         """ get the mid price and volume to compute the unnormalization of generated orders """
         last_time = self.currentTime.floor("Min") - pd.Timedelta('1m')
-        mid_price = (ohlc['open'].loc[last_time] + ohlc['close'].loc[last_time]) / 2
+        mid_price = (ohlc.loc[last_time]["open"] + ohlc.loc[last_time]["close"]) / 2
 
         # TODO: change here maybe
-        volumes = ohlc.loc[pd.to_datetime("2020-06-03 09:30:00"):pd.to_datetime("2020-06-03 09:59:00")]["volume"] * 0.3
+        volumes = ohlc.loc[self.mkt_open:self.ganstartup_time]["volume"] * self.volume_perc
 
-        return mid_price, volumes.values.reshape(-1,1)* 0.3
+        return mid_price, volumes.values.reshape(-1,1)
 
     def placeOrders(self):
+        """ Get new orders from the GAN model and give them to the related TraderGan to put them in execution """
         # Wait for the first 30 minutes so that there is enough data
-        if self.currentTime <= pd.to_datetime("2020-06-03 09:30:00") + pd.Timedelta("30m"):
-            print("Set wakeup after 30min market open")
-            self.setWakeup(pd.to_datetime("2020-06-03 10:00:00"))
+        if self.currentTime < self.ganstartup_time:
+            self.setWakeup(self.ganstartup_time)
             return
+
         # If it is passed more than 1 minute between the last call and this one,
         # we can generate trades with the GAN
-        if self.currentTime >= self.last_call + pd.Timedelta("1m"):
-            print("Call trading GAN", self.currentTime)
+        if self.currentTime >= self.last_call_gan + pd.Timedelta("1m"):
             # Preprocess the OHLC s.t. the GAN can use that
             # (i.e., generate signals, take last 2 minutes, normalize)
             ohlc = self.orderbook_symbol.get_ohlc(self.currentTime)
@@ -106,19 +123,18 @@ class GanAgent(TradingAgent):
             gan_input = generate_input(ohlc, self.currentTime)
             # Generate trades with the GAN (generator)
             trades = self.generator(gan_input)
-            # Unnormalize the generated trades
 
             # trades to pandas
             trades = pd.DataFrame(trades.reshape(4, -1).detach().numpy()).T.rename(
                     columns={0: "volume", 1: "price", 2: "direction", 3: "time_diff"})
-            trades = unnormalize(trades, mid_price=mid_price, mid_volumes=volumes)
 
+            trades = unnormalize(trades, mid_price=mid_price, mid_volumes=volumes)
             # change the `time_diff` from difference between each row to absolute time
             trades["time_diff"] = self.currentTime + pd.to_timedelta(trades['time_diff'].cumsum().clip(0.0001), unit='S')
             # Pass trades to the TraderAgent so that it can do the actual trading (even in the future)
             self.trader_agent.add_orders(trades.values)
             # Update last call time for next call
-            self.last_call = self.currentTime
+            self.last_call_gan = self.currentTime
 
         self.setWakeup(self.currentTime + self.getWakeFrequency())
 

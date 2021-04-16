@@ -13,14 +13,14 @@ from pandas.io.json import json_normalize
 from functools import reduce
 from scipy.sparse import dok_matrix
 from tqdm import tqdm
-
+import numpy as np
 
 class OrderBook:
 
     # An OrderBook requires an owning agent object, which it will use to send messages
     # outbound via the simulator Kernel (notifications of order creation, rejection,
     # cancellation, execution, etc).
-    def __init__(self, owner, symbol):
+    def __init__(self, owner, symbol, real_ohlc=None):
         self.owner = owner
         self.symbol = symbol
         self.bids = []
@@ -34,20 +34,13 @@ class OrderBook:
         # Create an order history for the exchange to report to certain agent types.
         self.history = [{}]
 
-        # get the last recent ohlc 
-        index_date = pd.date_range("2020-06-03 09:30:00", "2020-06-03 16:30:00", freq="1Min")
+        ## --------- GAN Data ---------------- ##
+        # load the first ohlc from a real stock
+        self.real_ohlc = real_ohlc
+        self.ganstartup_time = self.owner.mkt_open + pd.Timedelta("30m")
+        self.__init_ohlc()
+        ## --------- GAN Data ---------------- ##
 
-        # TODO: at the beginning of the data we have problem as we need trades? We can use ohlc of the market we want to simulate
-        self.__ohlc = pd.DataFrame(index=index_date, columns=["open","high","low","close", "count", "volume"])
-        
-        # last 1 minute orders and prices 
-        self.last_one_minute = {"date" : [], "prices" : []}
-        self.handled_order_id = set()
-        self.n_orders = 0
-        self.transacted_volume = 0
-        self.last_row_df = None 
-        self.last_one_minute_time = pd.to_datetime("2020-06-03 09:30:00")
-                
         # Last timestamp the orderbook for that symbol was updated
         self.last_update_ts = None
 
@@ -56,13 +49,36 @@ class OrderBook:
             "unrolled_transactions": None,
             "self.history_previous_length": 0
         }
+        
+    def __init_ohlc(self):
+        """ init a ohlc for the symbol """
+        if self.real_ohlc is not None:
+            self.__ohlc = pd.read_csv(self.real_ohlc, index_col=0)
+            self.__ohlc.index = pd.to_datetime(self.__ohlc.index)
+            # 5 Min to avoid that in the first minute the GAN does not place orders and we have ohlc empty
+            self.__ohlc.loc[self.ganstartup_time + pd.Timedelta("5min"):] = np.nan
+            self.last_one_minute_time = self.ganstartup_time
+        else:
+            index_date = pd.date_range(self.owner.mkt_open, self.owner.mkt_close, freq="1Min")
+            self.__ohlc = pd.DataFrame(index=index_date, columns=["open", "high", "low", "close", "count", "volume"])
+            self.last_one_minute_time = pd.to_datetime(self.owner.mkt_open)  # first tick time
+
+        # last 1 minute orders and prices
+        self.last_one_minute = {"date": [], "prices": []}
+        self.handled_order_id = set()
+        self.n_orders = 0
+        self.transacted_volume = 0
+        self.last_row_df = None
 
     def __update_ohlc(self, time):
         """ this function is called to update the ohlc if needed, i.e., if a minute is elapsed """
+        if self.real_ohlc is not None and time < self.ganstartup_time:
+            return 
+
         if time - self.last_one_minute_time >= pd.Timedelta("1m"):
-            if len(self.last_one_minute) == 0:
+            if len(self.last_one_minute["prices"]) == 0:
                 if self.last_row_df is not None:
-                    row_df = self.last_update_ts
+                    row_df = self.last_row_df
                 else:
                     self.last_row_df = self.last_row_df
                     self.last_one_minute = {"date": [], "prices": []}
@@ -71,7 +87,7 @@ class OrderBook:
                     self.transacted_volume = 0
                     return
             else:
-                if len(self.last_one_minute) == 1:
+                if len(self.last_one_minute["prices"]) == 1:
                     self.last_one_minute["date"] = self.last_one_minute["date"] * 2
                     self.last_one_minute["prices"] = self.last_one_minute["prices"] * 2
                 row_df = pd.DataFrame(self.last_one_minute)
@@ -79,12 +95,11 @@ class OrderBook:
                 row_df = row_df[["prices"]]
                 row_df = row_df.resample("1Min").ohlc()
                 row_df.columns = ["open", "high", "low", "close"]
-
+            
             # Update ohlc with the last collected data in that minute
-            self.__ohlc.loc[row_df.index[0], row_df.columns] = row_df.iloc[0][row_df.columns]
-            self.__ohlc.loc[row_df.index[0], "count"] = self.n_orders
-            self.__ohlc.loc[row_df.index[0], "volume"] = self.transacted_volume
-            self.__ohlc.to_csv("orderboook.csv")
+            self.__ohlc.loc[self.last_one_minute_time, row_df.columns] = row_df.iloc[0][row_df.columns]
+            self.__ohlc.loc[self.last_one_minute_time, "count"] = self.n_orders
+            self.__ohlc.loc[self.last_one_minute_time, "volume"] = self.transacted_volume
 
             # Reset one minute variables
             self.last_row_df = row_df
@@ -100,7 +115,6 @@ class OrderBook:
 
     def handle_ohlc(self, order, price, date, order_id, executed=False):
         """ fill the ohlc structure with the last order and price """
-
         # eventually update the ohlc
         self.__update_ohlc(date)
 
@@ -226,7 +240,9 @@ class OrderBook:
                     if quote in row:
                         if row[quote] is not None:
                             print(
-                                "WARNING: THIS IS A REAL PROBLEM: an order book contains bids and asks at the same quote price!")
+                                "WARNING!!!: THIS IS A REAL PROBLEM: an order book contains bids and asks at the same quote price!")
+                            exit()
+
                     row[quote] = volume
                     self.quotes_seen.add(quote)
                 self.book_log.append(row)

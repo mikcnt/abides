@@ -24,7 +24,7 @@ from copy import deepcopy
 class ExchangeAgent(FinancialAgent):
 
   def __init__(self, id, name, type, mkt_open, mkt_close, symbols, book_freq='S', wide_book=False, pipeline_delay = 40000,
-               computation_delay = 1, stream_history = 0, log_orders = False, random_state = None):
+               computation_delay = 1, stream_history = 0, real_ohlc=None, log_orders = False, random_state = None):
 
     super().__init__(id, name, type, random_state)
 
@@ -54,7 +54,7 @@ class ExchangeAgent(FinancialAgent):
     self.order_books = {}
 
     for symbol in symbols:
-      self.order_books[symbol] = OrderBook(self, symbol)
+      self.order_books[symbol] = OrderBook(self, symbol, real_ohlc=real_ohlc)
 
     # At what frequency will we archive the order books for visualization and analysis?
     self.book_freq = book_freq

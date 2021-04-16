@@ -401,6 +401,8 @@ agents.extend(
             starting_cash=starting_cash,
             min_size=1,
             max_size=10,
+            mkt_open=mkt_open,
+            mkt_close=mkt_close,
             wake_up_freq="1s",
             log_orders=log_orders,
             generator_path="../200.pth",
