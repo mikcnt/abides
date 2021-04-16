@@ -215,41 +215,6 @@ agents.extend([ExchangeAgent(id=0,
 agent_types.extend("ExchangeAgent")
 agent_count += 1
 
-# 6) Execution Agent
-
-trade = True if args.execution_agents else False
-
-#### Participation of Volume Agent parameters
-
-pov_agent_start_time = mkt_open + pd.to_timedelta('01:30:00')
-pov_agent_end_time = mkt_open + pd.to_timedelta('02:00:00')
-pov_proportion_of_volume = args.execution_pov
-pov_quantity = 12e8 #8   #try to use the same ratio of before, with 120 the 1min volume
-pov_frequency = '1min'
-pov_direction = "BUY"
-
-pov_agent = POVExecutionAgent(id=agent_count,
-                              name='POV_EXECUTION_AGENT',
-                              type='ExecutionAgent',
-                              symbol=symbol,
-                              starting_cash=starting_cash,
-                              start_time=pov_agent_start_time,
-                              end_time=pov_agent_end_time,
-                              freq=pov_frequency,
-                              lookback_period=pov_frequency,
-                              pov=pov_proportion_of_volume,
-                              direction=pov_direction,
-                              quantity=pov_quantity,
-                              trade=trade,
-                              log_orders=True,  # needed for plots so conflicts with others
-                              random_state=np.random.RandomState(seed=np.random.randint(low=0, high=2 ** 32,
-                                                                                          dtype='uint64')))
-
-execution_agents = [pov_agent]
-agents.extend(execution_agents)
-agent_types.extend("ExecutionAgent")
-agent_count += 1
-
 
 # 7a) Trader agents
 
@@ -302,6 +267,43 @@ agents.extend(
 gan_agent_indexes = list(range(agent_count, agent_count + num_gan_agents))
 agent_count += num_gan_agents
 agent_types.extend("GanAgent")
+
+
+# 6) Execution Agent
+
+trade = True if args.execution_agents else False
+
+#### Participation of Volume Agent parameters
+
+pov_agent_start_time = mkt_open + pd.to_timedelta('01:30:00')
+pov_agent_end_time = mkt_open + pd.to_timedelta('02:00:00')
+pov_proportion_of_volume = args.execution_pov
+pov_quantity = 12e5 #8   #try to use the same ratio of before, with 120 the 1min volume
+pov_frequency = '1min'
+pov_direction = "BUY"
+
+pov_agent = POVExecutionAgent(id=agent_count,
+                              name='POV_EXECUTION_AGENT',
+                              type='ExecutionAgent',
+                              symbol=symbol,
+                              starting_cash=starting_cash,
+                              start_time=pov_agent_start_time,
+                              end_time=pov_agent_end_time,
+                              freq=pov_frequency,
+                              lookback_period=pov_frequency,
+                              pov=pov_proportion_of_volume,
+                              direction=pov_direction,
+                              quantity=pov_quantity,
+                              trade=trade,
+                              log_orders=True,  # needed for plots so conflicts with others
+                              random_state=np.random.RandomState(seed=np.random.randint(low=0, high=2 ** 32,
+                                                                                          dtype='uint64')))
+
+execution_agents = [pov_agent]
+agents.extend(execution_agents)
+agent_types.extend("ExecutionAgent")
+agent_count += 1
+
 
 ########################################################################################################################
 ########################################### KERNEL AND OTHER CONFIG ####################################################

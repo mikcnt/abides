@@ -1,6 +1,6 @@
 {
   "CLIPPED_START_TIME": "09:30:00",
-  "CLIPPED_FINISH_TIME": "11:30:00",
+  "CLIPPED_FINISH_TIME": "14:00:00",
   "ONLY_EXECUTED": true,
   "NO_EXECUTION_EXCHANGE_NAME": "EXCHANGE_AGENT.bz2",
   "NO_EXECUTION_ORDERBOOK_NAME": "ORDERBOOK_ABM_FULL.bz2",
@@ -9,17 +9,17 @@
   "CACHE_PREFIX": "gan_pov_demo",
   "POVs": [
     0.01,
-    0.05
+    0.5
   ],
   "FREQUENCY": "1min",
   "DIRECTION": "BUY",
   "BASELINE_LABEL": "Baseline",
-  "SHADE_START_TIME": "10:00:00",
-  "SHADE_END_TIME": "11:00:00",
-  "YMAX": 10,
-  "YMIN": -10,
+  "SHADE_START_TIME": "11:00:00",
+  "SHADE_END_TIME": "11:30:00",
+  "YMAX": 100,
+  "YMIN": -100,
   "XMIN": "09:33:00",
-  "XMAX": "11:30:00",
+  "XMAX": "14:00:00",
   "ALPHA_90": 0.15,
   "ALPHA_50": 0.3,
   "yes_base": "../log/gan_pov_demo_yes_(\\d+)_pov_(0\\.\\d+)_(\\d{8})",
