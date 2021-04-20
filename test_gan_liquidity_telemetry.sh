@@ -1,10 +1,4 @@
 
-# CREATE THE REALISM METRICS
-mkdir -p evaluation/
-mkdir -p evaluation/test_telemetry_gan
-cd realism && python3 -u asset_returns_stylized_facts.py -s ../log/${out_dir} -o ../evaluation/test_telemetry_gan/ && cd ..
-exit
-
 # TEST THE GAN USING CONFIG: gan_pov and APPL AND MODEL 200.pth.  SAVING ALL TO log/test_gan_liquidity_telemetry 
 out_dir=test_gan_liquidity_telemetry
 python3 -u abides.py -c gan_pov -t ABM -d 20210201 -s 300 -l ${out_dir} --gan-model-file "data/200.pth" --real-ohlc "data/ohlc_1min_apple_20210201.csv" 
