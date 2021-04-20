@@ -25,7 +25,7 @@ class GanAgent(TradingAgent):
         random_state=None,
         verbose=False,
         trader_agent=None,
-        volume_perc=0.3
+        volume_perc=0.005
     ):
 
         super().__init__(
