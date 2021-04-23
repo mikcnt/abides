@@ -52,19 +52,9 @@ class TraderAgent(TradingAgent):
         self.direction += [int(t[2]) for t in new_orders]
         self.received_orders += len(new_orders)
 
-
-        # TODO:  CHECK how much orders we want to save and use, and if we want ot override the preivous ones
-        self.count += 1
-        if self.count % 5 == 0:
-            self.cancelOrders()
-
-        # add new orders
-        if self.order_to_use_by_gan >= self.max_order_gan:
-            self.order_to_place = list(new_orders)  # TODO: += or just = ?
-        else:
-            ne = list(new_orders)
-            random.shuffle(ne)  # TODO: random or just the first N-orders
-            self.order_to_place = list(ne[:self.order_to_use_by_gan]) # TODO: += or just = ?
+        if self.received_orders % 100 == 0:
+            print(new_orders[:, 3])
+        self.order_to_place = list(new_orders)
 
         self.order_to_place = sorted(self.order_to_place, key=lambda x: x[3])  # sort by time
         self.set_wakeup()

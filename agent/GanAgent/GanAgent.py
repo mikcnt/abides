@@ -115,7 +115,7 @@ class GanAgent(TradingAgent):
 
         # If it is passed more than 1 minute between the last call and this one,
         # we can generate trades with the GAN
-        if self.currentTime >= self.last_call_gan + pd.Timedelta("1m"):
+        if self.currentTime >= self.ganstartup_time:
             # Preprocess the OHLC s.t. the GAN can use that
             # (i.e., generate signals, take last 2 minutes, normalize)
             ohlc = self.orderbook_symbol.get_ohlc(self.currentTime)
@@ -131,12 +131,12 @@ class GanAgent(TradingAgent):
             trades = unnormalize(trades, mid_price=mid_price, mid_volumes=volumes)
             # change the `time_diff` from difference between each row to absolute time
             trades["time_diff"] = self.currentTime + pd.to_timedelta(trades['time_diff'].cumsum().clip(0.0001), unit='S')
+            next_wake_up = trades.iloc[0]["time_diff"]
             # Pass trades to the TraderAgent so that it can do the actual trading (even in the future)
             self.trader_agent.add_orders(trades.values)
             # Update last call time for next call
             self.last_call_gan = self.currentTime
-
-        self.setWakeup(self.currentTime + self.getWakeFrequency())
+            self.setWakeup(next_wake_up)
 
     def getWakeFrequency(self):
         return pd.Timedelta(self.wake_up_freq)

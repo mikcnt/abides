@@ -13,6 +13,8 @@ def extract_signals(ohlc):
     ohlc["lbband"] = bb.bollinger_lband()
     ohlc["hbband"] = bb.bollinger_hband()
 
+    ohlc["mid_price_kurtosis"] = ohlc["mid_price"].rolling(10).kurt()
+
     # compute the current volatility of the stock
     # 10 as window to be consistent with 10 time
     vatr = ta.volatility.AverageTrueRange(
@@ -48,7 +50,7 @@ def extract_signals(ohlc):
     return ohlc
 
 
-def normalize(df):
+def normalize(df, norm_volume=8592, norm_orders=234):
     df_copy = df.copy()
     mid_price_cols = [
         "lbband",
@@ -57,11 +59,15 @@ def normalize(df):
         "mavg_26",
         "ema_12",
         "ema_26",
+        "mid_price_kurtosis"
     ]
     minmax_cols = ["macd", "rsi", "momentum"]
 
     for col in mid_price_cols:
         df_copy[col] = df_copy[col] / df_copy["mid_price"]
+
+    df_copy["volume"] = df_copy["volume"] / norm_volume
+    df_copy["count"] = df_copy["count"] / norm_orders
 
     for col in minmax_cols:
         non_normalized = df_copy.pop(col).to_numpy().reshape(-1, 1)
@@ -84,8 +90,10 @@ def generate_input(ohlc, time):
         "macd",
         "rsi",
         "momentum",
-        "vvolat",
         "count",
+        "vvolat",
+        "mid_price_kurtosis",
+        "volume"
     ]
 
     signals = extract_signals(ohlc)
@@ -124,25 +132,24 @@ def load_model(model, path):
     return model
 
 
-def unnormalize(normalized, mid_price, mid_volumes, avg_volume=None):
+def unnormalize(normalized, mid_price, mid_volumes, avg_volume=None, norm_volume=8592):
     unnormalized = normalized.copy()
 
-    # TODO: use avg_volume and mid_price here not, using the volume in the current way?
     unnormalized["price"] = normalized["price"] * mid_price
-#    unnormalized["volume"] = unnormalized["volume"] * avg_volume
-
-    scaler = MinMaxScaler()
-    scaler.fit(mid_volumes)
+    unnormalized["volume"] = unnormalized["volume"] * norm_volume
 #
-    volume_unnormalized = scaler.inverse_transform(
-        np.array(normalized["volume"]).reshape(1, -1)
-    )
-    unnormalized["volume"] = volume_unnormalized.astype(int).ravel()
+#    scaler = MinMaxScaler()
+#    scaler.fit(mid_volumes)
+##
+#    volume_unnormalized = scaler.inverse_transform(
+#        np.array(normalized["volume"]).reshape(1, -1)
+#    )
+#    unnormalized["volume"] = volume_unnormalized.astype(int).ravel()
 
     unnormalized.loc[normalized["direction"] <= 0.5, "direction"] = -1
     unnormalized.loc[normalized["direction"] > 0.5, "direction"] = 1
 
-    # TODO: why?
-    unnormalized["time_diff"] = np.exp(normalized["time_diff"] * 10)
+#    # TODO: why?
+#    unnormalized["time_diff"] = np.exp(normalized["time_diff"] * 10)
 
     return unnormalized

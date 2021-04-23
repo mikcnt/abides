@@ -55,6 +55,7 @@ class OrderBook:
         if self.real_ohlc is not None:
             self.__ohlc = pd.read_csv(self.real_ohlc, index_col=0)
             self.__ohlc.index = pd.to_datetime(self.__ohlc.index)
+            self.__ohlc[["open", "high", "low", "close"]] = self.__ohlc[["open", "high", "low", "close"]] / 100
             # 5 Min to avoid that in the first minute the GAN does not place orders and we have ohlc empty
             self.__ohlc.loc[self.ganstartup_time + pd.Timedelta("5min"):] = np.nan
             self.last_one_minute_time = self.ganstartup_time
