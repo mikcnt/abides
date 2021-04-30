@@ -35,7 +35,7 @@ class TraderAgent(TradingAgent):
         self.placed_orders = 0
         self.direction = []
         # The amount of orders to use in each timestamp
-        self.max_order_gan = 1024
+        self.max_order_gan = 60
         self.order_to_use_by_gan = 50
 
         self.count = 0

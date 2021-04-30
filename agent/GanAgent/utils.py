@@ -48,66 +48,49 @@ def extract_signals(ohlc):
     return ohlc
 
 
-def normalize(df):
+def normalize(df, average_norders, average_volume):
     df_copy = df.copy()
     mid_price_cols = [
-        "lbband",
-        "hbband",
-        "mavg_12",
-        "mavg_26",
-        "ema_12",
-        "ema_26",
+        "open",
+        "high",
+        "low",
+        "close",
     ]
-    minmax_cols = ["macd", "rsi", "momentum"]
 
     for col in mid_price_cols:
         df_copy[col] = df_copy[col] / df_copy["mid_price"]
 
-    for col in minmax_cols:
-        non_normalized = df_copy.pop(col).to_numpy().reshape(-1, 1)
-        scaler = MinMaxScaler()
-        df_copy[col] = scaler.fit_transform(non_normalized)
+    df_copy["norders"] = df_copy["norders"] / average_norders
+    df_copy["volume"] = df_copy["volume"] / average_volume
 
-    df_copy.drop(columns={"mid_price"}, inplace=True)
     return df_copy
 
 
 def generate_input(ohlc, time):
-
+    # columns fed to the GAN generator
     cols = [
-        "lbband",
-        "hbband",
-        "mavg_12",
-        "mavg_26",
-        "ema_12",
-        "ema_26",
-        "macd",
-        "rsi",
-        "momentum",
-        "vvolat",
-        "count",
+        "open",
+        "high",
+        "low",
+        "close",
+        "norders",
+        "volume",
     ]
 
-    signals = extract_signals(ohlc)
+    # get 30 minutes of ohlc before current time
+    time = time.floor("30S") - pd.Timedelta(seconds=30)
+    ohlc_30_minutes = ohlc_df.loc[time - pd.Timedelta(seconds=1800):time - pd.Timedelta(seconds=30)]
 
-    start_time = time.floor("Min") - pd.Timedelta('2m')
-    end_time = time.floor("Min") - pd.Timedelta('1m')
+    # normalize ohlc and leave signals columns
+    ohlc_30_minutes = normalize(ohlc_30_minutes)[cols]
+    
+    # convert to torch and concatenate noise
+    ohlc_30_minutes = torch.tensor(ohlc_30_minutes.values, dtype=torch.float32)
+    gen_noise = torch.rand((ohlc_30_minutes.shape[0], len(cols)), dtype=torch.float32)
+    gen_input = torch.cat((ohlc_30_minutes, gen_noise), dim=1).T
 
-    signals = signals.loc[start_time:end_time]
-
-    signals = normalize(signals)
-
-    tech_signals = []
-    tech_signals.append(torch.tensor(signals[cols].mean().fillna(0), dtype=torch.float32))
-    tech_signals.append(torch.tensor(signals[cols].std().fillna(0), dtype=torch.float32))
-    tech_signals.append(torch.tensor(signals[cols].skew().fillna(0), dtype=torch.float32))
-    tech_signals.append(torch.tensor(signals[cols].kurtosis().fillna(0), dtype=torch.float32))
-
-    rand_noise = torch.randn(100 - len(tech_signals) * len(cols), dtype=torch.float32)
-
-    noise = torch.cat((*tech_signals, rand_noise)).reshape(100, 1, 1)
-
-    return torch.unsqueeze(noise, 0).float()
+    # unsqueeze to create batch dimension
+    return torch.unsqueeze(gen_input, 0)
 
 
 def reshape_output(generated):
@@ -142,7 +125,8 @@ def unnormalize(normalized, mid_price, mid_volumes, avg_volume=None):
     unnormalized.loc[normalized["direction"] <= 0.5, "direction"] = -1
     unnormalized.loc[normalized["direction"] > 0.5, "direction"] = 1
 
+    # no unnormalization back, right?
     # TODO: why?
-    unnormalized["time_diff"] = np.exp(normalized["time_diff"] * 10)
+    # unnormalized["time_diff"] = np.exp(normalized["time_diff"] * 10)
 
     return unnormalized
