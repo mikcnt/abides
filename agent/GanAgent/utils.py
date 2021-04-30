@@ -48,7 +48,7 @@ def extract_signals(ohlc):
     return ohlc
 
 
-def normalize(df, average_norders, average_volume):
+def normalize(df, norm_volume=8592, norm_orders=234):
     df_copy = df.copy()
     mid_price_cols = [
         "open",
@@ -60,8 +60,8 @@ def normalize(df, average_norders, average_volume):
     for col in mid_price_cols:
         df_copy[col] = df_copy[col] / df_copy["mid_price"]
 
-    df_copy["norders"] = df_copy["norders"] / average_norders
-    df_copy["volume"] = df_copy["volume"] / average_volume
+    df_copy["norders"] = df_copy["norders"] / norm_orders
+    df_copy["volume"] = df_copy["volume"] / norm_volume
 
     return df_copy
 
