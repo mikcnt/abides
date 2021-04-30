@@ -79,7 +79,7 @@ def generate_input(ohlc, time):
 
     # get 30 minutes of ohlc before current time
     time = time.floor("30S") - pd.Timedelta(seconds=30)
-    ohlc_30_minutes = ohlc_df.loc[time - pd.Timedelta(seconds=1800):time - pd.Timedelta(seconds=30)]
+    ohlc_30_minutes = ohlc.loc[time - pd.Timedelta(seconds=1800):time - pd.Timedelta(seconds=30)]
 
     # normalize ohlc and leave signals columns
     ohlc_30_minutes = normalize(ohlc_30_minutes)[cols]
