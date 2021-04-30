@@ -47,7 +47,7 @@ class GanAgent(TradingAgent):
         self.orderbook_symbol = None
         self.tech_signals = []
         self.log_orders = log_orders
-        self.generator = load_model(Generator(100), generator_path)
+        self.generator = load_model(Generator(12), generator_path)
         self.state = "AWAITING_WAKEUP"
         self.agent_state = "WAITING"
         self.time_passed = 0
