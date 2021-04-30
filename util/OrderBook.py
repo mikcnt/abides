@@ -37,6 +37,8 @@ class OrderBook:
         ## --------- GAN Data ---------------- ##
         # load the first ohlc from a real stock
         self.real_ohlc = real_ohlc
+        self.ohlc_freq = pd.Timedelta(seconds=30)
+        self.ohlc_freq_str = "30S"
         self.ganstartup_time = self.owner.mkt_open + pd.Timedelta("30m")
         self.__init_ohlc()
         ## --------- GAN Data ---------------- ##
@@ -54,14 +56,17 @@ class OrderBook:
         """ init a ohlc for the symbol """
         if self.real_ohlc is not None:
             self.__ohlc = pd.read_csv(self.real_ohlc, index_col=0)
+            # fix norders
+            if "norders" in self.__ohlc.columns:
+                self.__ohlc["count"] =self.__ohlc["norders"]
             self.__ohlc.index = pd.to_datetime(self.__ohlc.index)
             # 5 Min to avoid that in the first minute the GAN does not place orders and we have ohlc empty
             self.__ohlc.loc[self.ganstartup_time + pd.Timedelta("5min"):] = np.nan
-            self.last_one_minute_time = self.ganstartup_time
+            self.last_ohlc_timestep = self.ganstartup_time
         else:
-            index_date = pd.date_range(self.owner.mkt_open, self.owner.mkt_close, freq="1Min")
+            index_date = pd.date_range(self.owner.mkt_open, self.owner.mkt_close, freq=self.ohlc_freq_str)
             self.__ohlc = pd.DataFrame(index=index_date, columns=["open", "high", "low", "close", "count", "volume"])
-            self.last_one_minute_time = pd.to_datetime(self.owner.mkt_open)  # first tick time
+            self.last_ohlc_timestep = pd.to_datetime(self.owner.mkt_open)  # first tick time
 
         # last 1 minute orders and prices
         self.last_one_minute = {"date": [], "prices": []}
@@ -75,14 +80,14 @@ class OrderBook:
         if self.real_ohlc is not None and time < self.ganstartup_time:
             return 
 
-        if time - self.last_one_minute_time >= pd.Timedelta("1m"):
+        if time - self.last_ohlc_timestep >= self.ohlc_freq:
             if len(self.last_one_minute["prices"]) == 0:
                 if self.last_row_df is not None:
                     row_df = self.last_row_df
                 else:
                     self.last_row_df = self.last_row_df
                     self.last_one_minute = {"date": [], "prices": []}
-                    self.last_one_minute_time = self.last_one_minute_time + pd.Timedelta("1m")
+                    self.last_ohlc_timestep = self.last_ohlc_timestep + self.ohlc_freq
                     self.n_orders = 0
                     self.transacted_volume = 0
                     return
@@ -93,18 +98,18 @@ class OrderBook:
                 row_df = pd.DataFrame(self.last_one_minute)
                 row_df.index = row_df["date"]
                 row_df = row_df[["prices"]]
-                row_df = row_df.resample("1Min").ohlc()
+                row_df = row_df.resample(self.ohlc_freq_str).ohlc()
                 row_df.columns = ["open", "high", "low", "close"]
             
             # Update ohlc with the last collected data in that minute
-            self.__ohlc.loc[self.last_one_minute_time, row_df.columns] = row_df.iloc[0][row_df.columns]
-            self.__ohlc.loc[self.last_one_minute_time, "count"] = self.n_orders
-            self.__ohlc.loc[self.last_one_minute_time, "volume"] = self.transacted_volume
+            self.__ohlc.loc[self.last_ohlc_timestep, row_df.columns] = row_df.iloc[0][row_df.columns]
+            self.__ohlc.loc[self.last_ohlc_timestep, "count"] = self.n_orders
+            self.__ohlc.loc[self.last_ohlc_timestep, "volume"] = self.transacted_volume
 
             # Reset one minute variables
             self.last_row_df = row_df
             self.last_one_minute = {"date": [], "prices": []}
-            self.last_one_minute_time = self.last_one_minute_time + pd.Timedelta("1m")
+            self.last_ohlc_timestep = self.last_ohlc_timestep + self.ohlc_freq
             self.n_orders = 0
             self.transacted_volume = 0
 
