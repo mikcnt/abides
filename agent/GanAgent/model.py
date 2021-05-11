@@ -87,10 +87,7 @@ class Generator(nn.Module):
             nn.ReLU(),
         )
     def forward(self, x):
-        print("x" , x.shape)
         lstm_out = self.lstm(x)
-        print("lstm_out" , lstm_out.shape)
-
         noise = torch.rand(
             (x.shape[0], self.noise_dimension),
             dtype=torch.float32,
@@ -98,8 +95,6 @@ class Generator(nn.Module):
         )
         # TODO: add time window to orders and noise
         lstm_noise = torch.cat((lstm_out, noise), dim=1)
-        print("noise" , noise.shape)
-        print("lstm_noise" , lstm_noise.shape)
         out = self.main(lstm_noise)
         return out
 

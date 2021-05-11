@@ -95,7 +95,6 @@ def generate_input(latest_trades, scalers, cur_time):
     
     # set date as index to use `between_time`
     # TODO: Brutto da cambaire
-    print(cur_time)
     latest_trades["time_slot"] = cur_time
     latest_trades.index = latest_trades["time_slot"]
     for i in range(len(time_slots) - 1):
@@ -135,7 +134,10 @@ def unnormalize(normalized, scalers):
     unnormalized = normalized.copy()
     
     for col in ["time_diff", "size", "price"]:
-        unnormalize[col] = scalers[col].inverse_transform(unnormalized[col]) 
+        if col ==  "size":
+            unnormalized["volume"] = scalers[col].inverse_transform(unnormalized[["volume"]]) 
+        else:
+            unnormalized[col] = scalers[col].inverse_transform(unnormalized[[col]]) 
 
     unnormalized.loc[normalized["direction"] <= 0, "direction"] = -1
     unnormalized.loc[normalized["direction"] > 0, "direction"] = 1

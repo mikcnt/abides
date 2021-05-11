@@ -39,7 +39,7 @@ class OrderBook:
         # load the first ohlc from a real stock
         self.real_ohlc = real_ohlc
         self.trade_to_store = 50
-        self.ganstartup_time = self.owner.mkt_open + pd.Timedelta("30m")
+        self.ganstartup_time = self.owner.mkt_open #+ pd.Timedelta("30m")
         self.latest_trades = None
         self.last_trade_time = self.owner.mkt_open
         
@@ -134,44 +134,46 @@ class OrderBook:
         # 9:30 ---> 9:30:01 --> time_diff --> 1sec
         # 9:30:01 --> 9:30:05 --> time_diff -> 4 sec
         # 9:30:05 --> 9:40:00 --> time_diff -> 55 sec 
-        time_diff = (self.last_trade_time - date).seconds
+        time_diff = (date - self.last_trade_time).microseconds / 10e5
         self.last_trade_time = date
 
         # compute new best bid and best ask and their volume
         if len(self.bids) > 0:  # there is at least one bid
-            best_bid = self.bids[0][0].limit_price,
+            best_bid = self.bids[0][0].limit_price
             v_best_bid = sum([o.quantity for o in self.bids[0]])
         else:
             best_bid, v_best_bid = self.latest_trades.iloc[-1]["buy1"], self.latest_trades.iloc[-1]["vbuy1"]    
 
         if len(self.asks) > 0:
-            best_ask = self.asks[0][0].limit_price,
+            best_ask = self.asks[0][0].limit_price
             v_best_ask = sum([o.quantity for o in self.asks[0]])
         else:
             best_ask, v_best_ask = self.latest_trades.iloc[-1]["sell1"], self.latest_trades.iloc[-1]["vsell1"]
 
         # save data 
         self.latest_trades = self.latest_trades.shift(-1)
-        self.latest_trades.iloc[-1] = [order.quantity, price, 1 if order.is_buy_order else -1, 
-                                        time_diff, best_ask, v_best_ask, best_bid, v_best_bid]
+        direction_ = 1 if order.is_buy_order else -1
+        new_data = [order.quantity, price, direction_, 
+                                        best_ask, v_best_ask, best_bid, v_best_bid, time_diff]
 
+        self.latest_trades.iloc[-1] = new_data
 
     def handle_ohlc(self, order, price, date, order_id, executed=False):
         """ fill the ohlc structure with the last order and price """
         # eventually update the ohlc
         self.__update_ohlc(date)
 
-        self.__update_orderbook(order, price)
-
         if executed:
             if order_id not in self.handled_order_id:    
                 self.handled_order_id.add(order_id)
                 self.n_orders += 1
+                self.__update_orderbook(date, order, price)
 
             self.transacted_volume += order.quantity
             self.last_one_minute["date"].append(date)
             self.last_one_minute["prices"].append(price)
         else:
+            self.__update_orderbook(date, order, price)
             self.handled_order_id.add(order_id)
             self.n_orders += 1
     
@@ -196,7 +198,7 @@ class OrderBook:
                                            'cancellations': []}
 
         # add orders to the ohlc 
-        self.handle_ohlc(order, None, self.owner.currentTime, order.order_id, executed=False)
+        self.handle_ohlc(order, order.limit_price, self.owner.currentTime, order.order_id, executed=False)
         
         matching = True
 
@@ -305,7 +307,7 @@ class OrderBook:
             return
 
         # add orders to the ohlc 
-        self.handle_ohlc(order, None, self.owner.currentTime, order.order_id, executed=False)
+        #self.handle_ohlc(order, order.price, self.owner.currentTime, order.order_id, executed=False)
         
         orderbook_side = self.getInsideAsks() if order.is_buy_order else self.getInsideBids()
 
