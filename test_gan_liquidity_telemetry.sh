@@ -1,32 +1,17 @@
 
 # TEST THE GAN USING CONFIG: gan_pov and APPL AND MODEL 200.pth.  SAVING ALL TO log/test_gan_liquidity_telemetry 
+
+
+MODEL_PATH="/home/michele/GANs-for-trading/checkpoints/TSLA_2019-05-02_2019-05-05/generator/081.pth"
+INITIAL_ORDERBOOK="../preprocessed/TSLA_2019-05-02_2019-05-05.csv"
+OHLC_INIT = "...."
 out_dir=test_gan_liquidity_telemetry
-python3 -u abides.py -c gan_pov -t ABM -d 20210201 -s 300 -l ${out_dir} --gan-model-file "data/200.pth" --real-ohlc "data/ohlc_1min_apple_20210201.csv" 
+python3 -u abides.py -c gan_pov -t ABM -d 20210201 -s 300 -l ${out_dir} --gan-model-file ${MODEL_PATH} --real-ohlc ${INITIAL_ORDERBOOK} 
 
-# IF we want to test the shock with a POV agent
-
-# NOTE: POV 1 %
-#pov=0.01
-#out_dir=test_gan_liquidity_telemetry_001
-#python3 -u abides.py -c gan_pov -t ABM -d 20210201 -s 300 -l ${out_dir} -e -p ${pov} --gan-model-file "data/200.pth" --real-ohlc "data/ohlc_1min_apple_20210201.csv" 
-
-# NOTE: POV 5 %
-#pov=0.05
-#out_dir=test_gan_liquidity_telemetry_005
-#python3 -u abides.py -c gan_pov -t ABM -d 20210201 -s 300 -l ${out_dir} -e -p ${pov} --gan-model-file "data/200.pth" --real-ohlc "data/ohlc_1min_apple_20210201.csv" 
-
-# NOTE: POV 10 %
-#pov=0.1
-#out_dir=test_gan_liquidity_telemetry_01
-#python3 -u abides.py -c gan_pov -t ABM -d 20210201 -s 300 -l ${out_dir} -e -p ${pov} --gan-model-file "data/200.pth" --real-ohlc "data/ohlc_1min_apple_20210201.csv" 
-
-# NOTE: POV 50 %
-#pov=0.5
-#out_dir=test_gan_liquidity_telemetry_05
-#python3 -u abides.py -c gan_pov -t ABM -d 20210201 -s 300 -l ${out_dir} -e -p ${pov} --gan-model-file "data/200.pth" --real-ohlc "data/ohlc_1min_apple_20210201.csv" 
 
 
 wait
+exit
 # CREATE THE LIQUIDITY TELEMETRY
 cd util/plotting && python3 -u liquidity_telemetry.py ../../log/${out_dir}/EXCHANGE_AGENT.bz2 ../../log/${out_dir}/ORDERBOOK_ABM_FULL.bz2 -o ${out_dir}.png -c configs/plot_09.30_11.30.json && cd ../../
 wait

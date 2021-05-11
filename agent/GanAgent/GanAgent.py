@@ -1,10 +1,15 @@
-from agent.TradingAgent import TradingAgent
 import pandas as pd
 import numpy as np
 import torch
 import time
+
+from joblib import dump, load
 from .utils import *
 from .model import Generator
+from agent.TradingAgent import TradingAgent
+
+SCALER_DIR = "../scalers/"
+SCALER_NAMES = ["vsell1", "vbuy1", "time_diff", "size", "price", "sell1", "buy1"] 
 
 class GanAgent(TradingAgent):
     def __init__(
@@ -47,12 +52,14 @@ class GanAgent(TradingAgent):
         self.orderbook_symbol = None
         self.tech_signals = []
         self.log_orders = log_orders
-        self.generator = load_model(Generator(100), generator_path)
+        self.generator = load_model(Generator(), generator_path)
         self.state = "AWAITING_WAKEUP"
         self.agent_state = "WAITING"
         self.time_passed = 0
         self.mkt_open = mkt_open
         self.mkt_close = mkt_close
+
+        self.load_scalers()
 
         ## TODO: check try to have deterministic behavior/simulations
         torch.use_deterministic_algorithms(True)
@@ -67,6 +74,14 @@ class GanAgent(TradingAgent):
         self.volume_perc = volume_perc
 
         self.trader_agent = trader_agent
+    
+
+    def load_scalers(self):
+        """ Load min max scalers --- in future also boxcox """
+        self.scalers = {}
+        for sn in SCALER_NAMES:
+            self.scalers[sn] = load(SCALER_DIR + sn + ".gz") 
+
 
     def save_last_ohlc(self, prefix_file):
         """ save a log of the last ohlc to debug purpose and logging """
@@ -118,17 +133,19 @@ class GanAgent(TradingAgent):
         if self.currentTime >= self.ganstartup_time:
             # Preprocess the OHLC s.t. the GAN can use that
             # (i.e., generate signals, take last 2 minutes, normalize)
-            ohlc = self.orderbook_symbol.get_ohlc(self.currentTime)
-            mid_price, volumes = self.__get_unormalized_par(ohlc)
-            gan_input = generate_input(ohlc, self.currentTime)
+            ohlc, latest_trades = self.orderbook_symbol.get_ohlc(self.currentTime)
+            print(latest_trades)
+            gan_input = generate_input(latest_trades, self.scalers, self.currentTime)
             # Generate trades with the GAN (generator)
+            print(gan_input.shape)
+            print(gan_input)
             trades = self.generator(gan_input)
 
             # trades to pandas
             trades = pd.DataFrame(trades.reshape(4, -1).detach().numpy()).T.rename(
                     columns={0: "volume", 1: "price", 2: "direction", 3: "time_diff"})
 
-            trades = unnormalize(trades, mid_price=mid_price, mid_volumes=volumes)
+            trades = unnormalize(trades, self.scalers)
             # change the `time_diff` from difference between each row to absolute time
             trades["time_diff"] = self.currentTime + pd.to_timedelta(trades['time_diff'].cumsum().clip(0.0001), unit='S')
             next_wake_up = trades.iloc[0]["time_diff"]

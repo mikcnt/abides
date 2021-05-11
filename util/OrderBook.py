@@ -15,6 +15,7 @@ from scipy.sparse import dok_matrix
 from tqdm import tqdm
 import numpy as np
 
+
 class OrderBook:
 
     # An OrderBook requires an owning agent object, which it will use to send messages
@@ -37,7 +38,11 @@ class OrderBook:
         ## --------- GAN Data ---------------- ##
         # load the first ohlc from a real stock
         self.real_ohlc = real_ohlc
+        self.trade_to_store = 50
         self.ganstartup_time = self.owner.mkt_open + pd.Timedelta("30m")
+        self.latest_trades = None
+        self.last_trade_time = self.owner.mkt_open
+        
         self.__init_ohlc()
         ## --------- GAN Data ---------------- ##
 
@@ -53,12 +58,16 @@ class OrderBook:
     def __init_ohlc(self):
         """ init a ohlc for the symbol """
         if self.real_ohlc is not None:
-            self.__ohlc = pd.read_csv(self.real_ohlc, index_col=0)
-            self.__ohlc.index = pd.to_datetime(self.__ohlc.index)
-            self.__ohlc[["open", "high", "low", "close"]] = self.__ohlc[["open", "high", "low", "close"]] / 100
-            # 5 Min to avoid that in the first minute the GAN does not place orders and we have ohlc empty
+            self.__ohlc = pd.read_csv(self.real_ohlc)
+            self.__ohlc["date"] = pd.to_datetime(self.__ohlc["date"])
+            self.__ohlc = self.__ohlc.groupby("date").first()
+            # open,high,low,close,
+            self.__ohlc[["open", "high", "low", "close"]] = self.__ohlc[["open", "high", "low", "close"]] 
             self.__ohlc.loc[self.ganstartup_time + pd.Timedelta("5min"):] = np.nan
             self.last_one_minute_time = self.ganstartup_time
+            # read orderbook 
+            self.latest_trades = pd.read_csv(self.real_ohlc, nrows=self.trade_to_store, 
+                                                usecols=["size","price","direction", "time_diff", "sell1", "vsell1", "buy1", "vbuy1"])
         else:
             index_date = pd.date_range(self.owner.mkt_open, self.owner.mkt_close, freq="1Min")
             self.__ohlc = pd.DataFrame(index=index_date, columns=["open", "high", "low", "close", "count", "volume"])
@@ -112,12 +121,47 @@ class OrderBook:
     def get_ohlc(self, time):
         """ access the ohlc object """
         self.__update_ohlc(time)
-        return self.__ohlc.copy()
+        return self.__ohlc.copy(), self.latest_trades.copy()
+
+
+    def __update_orderbook(self, date, order, price):
+        """ udpate ordere book trades """
+        # update last trades
+        # "size","price","direction", "time_diff", 
+        # "sell1", "vsell1", "buy1", "vbuy1
+        
+        # time_diff 
+        # 9:30 ---> 9:30:01 --> time_diff --> 1sec
+        # 9:30:01 --> 9:30:05 --> time_diff -> 4 sec
+        # 9:30:05 --> 9:40:00 --> time_diff -> 55 sec 
+        time_diff = (self.last_trade_time - date).seconds
+        self.last_trade_time = date
+
+        # compute new best bid and best ask and their volume
+        if len(self.bids) > 0:  # there is at least one bid
+            best_bid = self.bids[0][0].limit_price,
+            v_best_bid = sum([o.quantity for o in self.bids[0]])
+        else:
+            best_bid, v_best_bid = self.latest_trades.iloc[-1]["buy1"], self.latest_trades.iloc[-1]["vbuy1"]    
+
+        if len(self.asks) > 0:
+            best_ask = self.asks[0][0].limit_price,
+            v_best_ask = sum([o.quantity for o in self.asks[0]])
+        else:
+            best_ask, v_best_ask = self.latest_trades.iloc[-1]["sell1"], self.latest_trades.iloc[-1]["vsell1"]
+
+        # save data 
+        self.latest_trades = self.latest_trades.shift(-1)
+        self.latest_trades.iloc[-1] = [order.quantity, price, 1 if order.is_buy_order else -1, 
+                                        time_diff, best_ask, v_best_ask, best_bid, v_best_bid]
+
 
     def handle_ohlc(self, order, price, date, order_id, executed=False):
         """ fill the ohlc structure with the last order and price """
         # eventually update the ohlc
         self.__update_ohlc(date)
+
+        self.__update_orderbook(order, price)
 
         if executed:
             if order_id not in self.handled_order_id:    

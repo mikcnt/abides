@@ -5,6 +5,7 @@ import numpy as np
 from torchvision import transforms
 from sklearn.preprocessing import MinMaxScaler
 
+
 def extract_signals(ohlc):
     # technical signals
     ohlc["mid_price"] = (ohlc["high"] + ohlc["low"]) / 2
@@ -78,44 +79,42 @@ def normalize(df, norm_volume=8592, norm_orders=234):
     return df_copy
 
 
-def generate_input(ohlc, time):
+def generate_input(latest_trades, scalers, cur_time):
+    for col in ["time_diff", "size", "price", "sell1", "vsell1", "buy1", "vbuy1"]:
+        scaler_col = scalers[col]
+        latest_trades[[col]] = scaler_col.transform(latest_trades[[col]])
 
-    cols = [
-        "lbband",
-        "hbband",
-        "mavg_12",
-        "mavg_26",
-        "ema_12",
-        "ema_26",
-        "macd",
-        "rsi",
-        "momentum",
-        "count",
-        "vvolat",
-        "mid_price_kurtosis",
-        "volume"
+    # -------------- TIME SLOT --------------
+    # (from 0 to 23 according to hour of the day of trading)
+    latest_trades["time_slot"] = 0
+    time_slots = pd.date_range("09:30:00", "16:30:00", periods=25)
+    # this is something like: ['09:30', '09:47', '10:05', '10:22', ...]
+    time_slots = [
+        f"{str(t.hour).zfill(2)}:{str(t.minute).zfill(2)}" for t in time_slots
     ]
+    
+    # set date as index to use `between_time`
+    # TODO: Brutto da cambaire
+    print(cur_time)
+    latest_trades["time_slot"] = cur_time
+    latest_trades.index = latest_trades["time_slot"]
+    for i in range(len(time_slots) - 1):
+        if len(latest_trades.between_time(time_slots[i], time_slots[i + 1])) > 0:       
+            latest_trades["time_slot"] = i  
+            break
+    
+    trade_features = ["size", "price", "direction", "time_diff"]
+    orderbook_features = ["sell1", "vsell1", "buy1", "vbuy1", "time_slot"]
 
-    signals = extract_signals(ohlc)
+    trades = torch.tensor(
+            latest_trades[trade_features].values, dtype=torch.float32,
+        )
+    orderbook = torch.tensor(
+            latest_trades[orderbook_features].values, dtype=torch.float32,
+    
+    )
 
-    start_time = time.floor("Min") - pd.Timedelta('2m')
-    end_time = time.floor("Min") - pd.Timedelta('1m')
-
-    signals = signals.loc[start_time:end_time]
-
-    signals = normalize(signals)
-
-    tech_signals = []
-    tech_signals.append(torch.tensor(signals[cols].mean().fillna(0), dtype=torch.float32))
-    tech_signals.append(torch.tensor(signals[cols].std().fillna(0), dtype=torch.float32))
-    tech_signals.append(torch.tensor(signals[cols].skew().fillna(0), dtype=torch.float32))
-    tech_signals.append(torch.tensor(signals[cols].kurtosis().fillna(0), dtype=torch.float32))
-
-    rand_noise = torch.randn(100 - len(tech_signals) * len(cols), dtype=torch.float32)
-
-    noise = torch.cat((*tech_signals, rand_noise)).reshape(100, 1, 1)
-
-    return torch.unsqueeze(noise, 0).float()
+    return torch.cat((trades, orderbook), dim=-1).unsqueeze(0)
 
 
 def reshape_output(generated):
@@ -132,24 +131,13 @@ def load_model(model, path):
     return model
 
 
-def unnormalize(normalized, mid_price, mid_volumes, avg_volume=None, norm_volume=8592):
+def unnormalize(normalized, scalers):
     unnormalized = normalized.copy()
+    
+    for col in ["time_diff", "size", "price"]:
+        unnormalize[col] = scalers[col].inverse_transform(unnormalized[col]) 
 
-    unnormalized["price"] = normalized["price"] * mid_price
-    unnormalized["volume"] = unnormalized["volume"] * norm_volume
-#
-#    scaler = MinMaxScaler()
-#    scaler.fit(mid_volumes)
-##
-#    volume_unnormalized = scaler.inverse_transform(
-#        np.array(normalized["volume"]).reshape(1, -1)
-#    )
-#    unnormalized["volume"] = volume_unnormalized.astype(int).ravel()
-
-    unnormalized.loc[normalized["direction"] <= 0.5, "direction"] = -1
-    unnormalized.loc[normalized["direction"] > 0.5, "direction"] = 1
-
-#    # TODO: why?
-#    unnormalized["time_diff"] = np.exp(normalized["time_diff"] * 10)
+    unnormalized.loc[normalized["direction"] <= 0, "direction"] = -1
+    unnormalized.loc[normalized["direction"] > 0, "direction"] = 1
 
     return unnormalized
