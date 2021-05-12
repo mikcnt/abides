@@ -66,8 +66,9 @@ class OrderBook:
             self.__ohlc.loc[self.ganstartup_time + pd.Timedelta("5min"):] = np.nan
             self.last_one_minute_time = self.ganstartup_time
             # read orderbook 
-            self.latest_trades = pd.read_csv(self.real_ohlc, nrows=self.trade_to_store, 
+            self.latest_trades = pd.read_csv(self.real_ohlc, # nrows=self.trade_to_store, 
                                                 usecols=["size","price","direction", "time_diff", "sell1", "vsell1", "buy1", "vbuy1"])
+            self.latest_trades = self.latest_trades.iloc[10000:10000 + 50]
         else:
             index_date = pd.date_range(self.owner.mkt_open, self.owner.mkt_close, freq="1Min")
             self.__ohlc = pd.DataFrame(index=index_date, columns=["open", "high", "low", "close", "count", "volume"])
@@ -138,17 +139,17 @@ class OrderBook:
         self.last_trade_time = date
 
         # compute new best bid and best ask and their volume
-        if len(self.bids) > 0:  # there is at least one bid
-            best_bid = self.bids[0][0].limit_price
-            v_best_bid = sum([o.quantity for o in self.bids[0]])
-        else:
-            best_bid, v_best_bid = self.latest_trades.iloc[-1]["buy1"], self.latest_trades.iloc[-1]["vbuy1"]    
+        # if len(self.bids) > 0:  # there is at least one bid
+        #     best_bid = self.bids[0][0].limit_price
+        #     v_best_bid = sum([o.quantity for o in self.bids[0]])
+        # else:
+        best_bid, v_best_bid = self.latest_trades.iloc[-1]["buy1"], self.latest_trades.iloc[-1]["vbuy1"]    
 
-        if len(self.asks) > 0:
-            best_ask = self.asks[0][0].limit_price
-            v_best_ask = sum([o.quantity for o in self.asks[0]])
-        else:
-            best_ask, v_best_ask = self.latest_trades.iloc[-1]["sell1"], self.latest_trades.iloc[-1]["vsell1"]
+        # if len(self.asks) > 0:
+        #     best_ask = self.asks[0][0].limit_price
+        #     v_best_ask = sum([o.quantity for o in self.asks[0]])
+        # else:
+        best_ask, v_best_ask = self.latest_trades.iloc[-1]["sell1"], self.latest_trades.iloc[-1]["vsell1"]
 
         # save data 
         self.latest_trades = self.latest_trades.shift(-1)

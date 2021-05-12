@@ -2,7 +2,7 @@
 # TEST THE GAN USING CONFIG: gan_pov and APPL AND MODEL 200.pth.  SAVING ALL TO log/test_gan_liquidity_telemetry 
 
 
-MODEL_PATH="/home/coletta/Scrivania/JP-MORGAN/GAN/test_wgan_1trade/GANs-for-trading/abides/097.pth"
+MODEL_PATH="data/073.pth"
 INITIAL_ORDERBOOK="../preprocessed/TSLA_2019-05-02_2019-05-05.csv"
 OHLC_INIT = "...."
 out_dir=test_gan_liquidity_telemetry

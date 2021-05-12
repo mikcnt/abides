@@ -80,7 +80,10 @@ class GanAgent(TradingAgent):
     def load_scalers(self):
         """ Load min max scalers --- in future also boxcox """
         self.scalers = {}
+        self.lambdas = {}
         for sn in SCALER_NAMES:
+            if sn in ['size', 'time_diff', 'vbuy1', 'vsell1']:
+                self.lambdas[sn] = load_pickle(SCALER_DIR + sn + "_lambda.pickle")
             self.scalers[sn] = load(SCALER_DIR + sn + ".gz") 
 
 
@@ -135,16 +138,19 @@ class GanAgent(TradingAgent):
             # Preprocess the OHLC s.t. the GAN can use that
             # (i.e., generate signals, take last 2 minutes, normalize)
             ohlc, latest_trades = self.orderbook_symbol.get_ohlc(self.currentTime)
-            gan_input = generate_input(latest_trades, self.scalers, self.currentTime)
+            gan_input = generate_input(latest_trades, self.scalers, self.lambdas, self.currentTime)
             # Generate trades with the GAN (generator)
             trades = self.generator(gan_input).reshape(1, 4)
             # trades to pandas
             trades = pd.DataFrame(trades.detach().numpy()).rename(
                     columns={0: "volume", 1: "price", 2: "direction", 3: "time_diff"})
-
-            trades = unnormalize(trades, self.scalers)
+            trades_print = trades.values.reshape(4)
+            # if trades_print[2] > 0:
+            print(trades.values)
+            trades = unnormalize(trades, self.scalers, self.lambdas)
+            # print(np.array(trades))
             # change the `time_diff` from difference between each row to absolute time
-            trades["time_diff"] =  trades["time_diff"].clip(0.001)*500
+            trades["time_diff"] =  trades["time_diff"].clip(0.001)*200
             trades["time_diff"] = self.currentTime + pd.to_timedelta(trades['time_diff'].cumsum().clip(0.0001), unit='S')
             trades["volume"] = trades["volume"].clip(1).astype(int)
 

@@ -2,9 +2,10 @@ import pandas as pd
 import ta
 import torch
 import numpy as np
+import pickle
 from torchvision import transforms
 from sklearn.preprocessing import MinMaxScaler
-
+from scipy.stats import boxcox
 
 def extract_signals(ohlc):
     # technical signals
@@ -79,10 +80,24 @@ def normalize(df, norm_volume=8592, norm_orders=234):
     return df_copy
 
 
-def generate_input(latest_trades, scalers, cur_time):
+def generate_input(latest_trades, scalers, lambdas, cur_time):
     for col in ["time_diff", "size", "price", "sell1", "vsell1", "buy1", "vbuy1"]:
+        if col in ['size', 'time_diff', 'vbuy1', 'vsell1']:
+            # clip values if equal to 0
+            min_value = latest_trades[col].min()
+            latest_trades[col] = (
+                    latest_trades[col].clip(lower=latest_trades[latest_trades != min_value][col].min())
+                    if min_value == 0
+                    else latest_trades[col]
+                )
+            # normalize with boxcox
+            lambda_col = lambdas[col]
+            latest_trades[col] = boxcox_(latest_trades[col], lmbda=lambda_col)
         scaler_col = scalers[col]
+        # if col == 'size':
+        # normalize with minmax
         latest_trades[[col]] = scaler_col.transform(latest_trades[[col]])
+
 
     # -------------- TIME SLOT --------------
     # (from 0 to 23 according to hour of the day of trading)
@@ -104,7 +119,6 @@ def generate_input(latest_trades, scalers, cur_time):
     
     trade_features = ["size", "price", "direction", "time_diff"]
     orderbook_features = ["sell1", "vsell1", "buy1", "vbuy1", "time_slot"]
-
     trades = torch.tensor(
             latest_trades[trade_features].values, dtype=torch.float32,
         )
@@ -112,8 +126,9 @@ def generate_input(latest_trades, scalers, cur_time):
             latest_trades[orderbook_features].values, dtype=torch.float32,
     
     )
-
-    return torch.cat((trades, orderbook), dim=-1).unsqueeze(0)
+    gan_input = torch.cat((trades, orderbook), dim=-1).unsqueeze(0)
+    # gan_input = torch.rand_like(gan_input)
+    return gan_input
 
 
 def reshape_output(generated):
@@ -130,16 +145,36 @@ def load_model(model, path):
     return model
 
 
-def unnormalize(normalized, scalers):
+def unnormalize(normalized, scalers, lambdas):
+    # print(normalized)
     unnormalized = normalized.copy()
-    
     for col in ["time_diff", "size", "price"]:
-        if col ==  "size":
-            unnormalized["volume"] = scalers[col].inverse_transform(unnormalized[["volume"]]) 
-        else:
-            unnormalized[col] = scalers[col].inverse_transform(unnormalized[[col]]) 
-
+        col_df = "volume" if col == "size" else col
+        unnormalized[col_df] = scalers[col].inverse_transform(unnormalized[[col_df]]) 
+        if col != 'price':
+            unnormalized[col_df] = reverse_boxcox(unnormalized[col_df], lambdas[col])
+            # unnormalized[col_df] = (lambdas[col] * unnormalized[col_df] + 1) ** (1 / lambdas[col])
+    # print(unnormalized)
     unnormalized.loc[normalized["direction"] <= 0, "direction"] = -1
     unnormalized.loc[normalized["direction"] > 0, "direction"] = 1
 
+    # unnormalized["direction"] = np.random.randint(0, 2)
+    # unnormalized.loc[normalized["direction"] == 0, "direction"] = -1
+
     return unnormalized
+
+
+def load_pickle(path):
+    with open(path, 'rb') as f:
+        return pickle.load(f)
+
+
+def boxcox_(x, lmbda):
+    if lmbda != 0:
+        return (x ** lmbda - 1) / lmbda
+    return np.log(x)
+
+def reverse_boxcox(x, lmbda):
+    if lmbda != 0:
+        return (lmbda * x + 1) ** (1 / lmbda)
+    return np.exp(x)
