@@ -6,6 +6,7 @@ import time
 from joblib import dump, load
 from .utils import *
 from .model import Generator
+from .new_models import WGANGP
 from agent.TradingAgent import TradingAgent
 
 SCALER_DIR = "../scalers/"
@@ -52,7 +53,8 @@ class GanAgent(TradingAgent):
         self.orderbook_symbol = None
         self.tech_signals = []
         self.log_orders = log_orders
-        self.generator = load_model(Generator(), generator_path)
+        # self.generator = load_model(Generator(), generator_path)
+        self.generator = WGANGP.load_from_checkpoint(generator_path)
         self.generator.eval()
         self.state = "AWAITING_WAKEUP"
         self.agent_state = "WAITING"
